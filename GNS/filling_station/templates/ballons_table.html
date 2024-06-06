@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- <div class="left-panel-wrapper">
+    <div class="left-panel">
+      some content some content some content some content some content some content some content some content some content
+    </div>
+</div> -->
+
+<div>
+    
+    <div>
+        <table class="table table-striped table-hover">
+            <tr align="center" width = 100%>
+                <th>№ п/п</th>
+                <th>RFID метка</th>
+                <th>Дата добавления</th>
+                <th>Статус</th>
+            </tr>
+            {% for ballon in page_obj.object_list %}
+            <tr align="center">
+                <td>{{ ballon.id }}</td>
+                <td>{{ ballon.nfc_tag }}</td>
+                <td>{{ ballon.creation_date }}</td>
+                <td>{{ ballon.state }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1">&laquo; Начало</a>
+                <a href="?page={{ page_obj.previous_page_number }}">назад</a>
+            {% endif %}
+    
+            <span class="current">
+                Лист {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}.
+            </span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">вперёд</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}">Конец &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+
+    <div > 
+        <p>Количество баллонов: за текущую смену - {{ ballons_amount }}, за прошлую смену - {{ previous_ballons_amount }}</p>
+        <!-- <p>Количество баллонов за {{ format_required_date }} - {{ required_date_amount }}</p> -->
+    </div>
+    
+    <div >
+        <form method="post" enctype="multipart/form-data">
+           {% csrf_token %}
+           {{ form }}
+           <button class="btn btn-primary" style="margin: 5% 2% 5% 5%;" type="submit">Выгрузить отчёт за дату</button>
+        </form>
+   </div>
+
+</div>
+
+{% endblock content %}
