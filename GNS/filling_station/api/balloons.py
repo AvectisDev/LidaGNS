@@ -3,6 +3,7 @@ import requests
 from ..models import Balloon, BalloonAmount, BalloonsLoadingBatch, BalloonsUnloadingBatch, Reader, Carousel
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+import json
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from rest_framework import generics, status, viewsets
@@ -15,7 +16,6 @@ from .serializers import (BalloonSerializer, CarouselSerializer, BalloonAmountSe
                           BalloonsLoadingBatchSerializer, BalloonsUnloadingBatchSerializer,
                           ActiveLoadingBatchSerializer, ActiveUnloadingBatchSerializer,
                           BalloonAmountLoadingSerializer, BalloonAmountUnloadingSerializer)
-
 
 logger = logging.getLogger('filling_station')
 
@@ -47,7 +47,7 @@ BALLOONS_UNLOADING_READER_LIST = [1, 2]
 
 class BalloonViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class BalloonViewSet(viewsets.ViewSet):
         url = f'{BASE_URL}/getballoonbynfctag?nfctag={nfc_tag}&realm=brestoblgas'
 
         try:
-            response = requests.get(url, timeout=3)
+            response = requests.get(url, timeout=2)
             response.raise_for_status()
             result = response.json()
 
@@ -128,13 +128,6 @@ class BalloonViewSet(viewsets.ViewSet):
                 balloon.save()
 
         # Выполняем передачу данных в OPC сервер (лампочки на считывателях)
-        logger.info(
-            f'данные в функции update-by-reader reader_number-{reader_number},'
-            f'nfc_tag={nfc_tag} '
-            f'type of reader_number-{type(reader_number)}; '
-            f'blink-{balloon.update_passport_required}, '
-            f'type of blink-{type(balloon.update_passport_required)}'
-        )
         send_to_opc.delay(reader=reader_number, blink=balloon.update_passport_required)
 
         # Если ридер стоит на приёмке или отгрузке, то добавляем текущий баллон в партию
@@ -144,7 +137,7 @@ class BalloonViewSet(viewsets.ViewSet):
 
         # Добавляем информацию по баллону в таблицу с ридерами
         if reader_number:
-            Reader.objects.create(
+            reader_balloon = Reader.objects.create(
                 number=reader_number,
                 nfc_tag=nfc_tag,
                 serial_number=balloon.serial_number,
@@ -153,6 +146,25 @@ class BalloonViewSet(viewsets.ViewSet):
                 brutto=balloon.brutto,
                 filling_status=balloon.filling_status
             )
+            # Сохраняем баллон в кэш на каруселях наполнения №1 и 2)
+            if reader_number in [7, 8]:
+                cache_key = f'reader_{reader_number}_balloon_stack'
+                stack = cache.get(cache_key, [])
+                logger.debug(f'Метка на {reader_number} считывателе. Исходный стек = {stack}')
+                # Добавляем объект в стек
+                stack.insert(0, {
+                    'number': reader_balloon.number,
+                    'nfc_tag': reader_balloon.nfc_tag,
+                    'serial_number': reader_balloon.serial_number,
+                    'size': reader_balloon.size,
+                    'netto': reader_balloon.netto,
+                    'brutto': reader_balloon.brutto,
+                    'filling_status': reader_balloon.filling_status,
+                })
+                logger.debug(f'Стек считывателя {reader_number} = {stack}')
+
+                # Сохраняем обновленный стек в кэш
+                cache.set(cache_key, stack, timeout=None)
 
         serializer = BalloonSerializer(balloon)
         return Response(serializer.data)
@@ -221,62 +233,26 @@ def update_from_carousel(request):
     """
     request_type = request.data.get('request_type')
     post_number = request.data.get('post_number')
-    weight_combined = request.data.get('weight_combined')
 
-    # Уникальный ключ для кэширования запроса
-    cache_key = f"carousel_request_{request_type}_{post_number}_{weight_combined}"
-    cache_time = 5
-
-    if cache.get(cache_key):
-        logger.debug(f"Запрос уже обрабатывается: {request_type} {post_number} {weight_combined}")
-        return Response({"error": "Запрос уже обрабатывается"}, status=status.HTTP_202_ACCEPTED)
-
-    cache.set(cache_key, True, cache_time)
-
-    logger.debug(f"Обработка запроса от карусели {request_type} {post_number} {weight_combined}")
+    logger.debug(f"Обработка запроса от карусели: Тип - {request_type}, пост - {post_number}")
     if not request_type:
         logger.error("Тип запроса отсутствует в теле запроса")
         return Response({"error": "Не указан тип запроса"}, status=status.HTTP_400_BAD_REQUEST)
-    if request_type == '0x7a':
-        try:
-            current_time = datetime.now()
-            one_minute_ago = current_time - timedelta(minutes=1)
 
-            balloon = Reader.objects.filter(number=8, change_time__lt=one_minute_ago.time(), change_date__lt=one_minute_ago.date()).first()
-            logger.debug(f"запрос типа 0x7a. Выполнен поиск баллона")
-            if not balloon:
-                logger.error("Объект Reader с number=8 не найден")
-                carousel_post = Carousel.objects.create(
-                    is_empty=True,
-                    post_number=post_number,
-                    empty_weight=weight_combined / 1000,
-                )
-                logger.debug(f"запрос типа 0x7a. Отправка ответа от django...")
-                return Response({"error": "Баллон не распознан"}, status=status.HTTP_201_CREATED)
-            else:
-                carousel_post = Carousel.objects.create(
-                    is_empty = True,
-                    post_number=post_number,
-                    empty_weight = weight_combined / 1000,
-                    nfc_tag = balloon.nfc_tag,
-                    serial_number = balloon.serial_number,
-                    netto = balloon.netto,
-                    brutto = balloon.brutto,
-                    filling_status = balloon.filling_status
-                )
-                # serializer = CarouselSerializer(carousel_post)
-                logger.debug(f"запрос типа 0x7a. Отправка ответа от django...")
-                return Response({"full_weight":balloon.brutto}, status=status.HTTP_201_CREATED)
-        except Exception as error:
-            logger.error(f'Ошибка при обработке запроса типа 0x7a - {error}')
-            return Response({"error": str(error)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    if request_type == '0x7a':
+        # Валидируем и сохраняем данные через сериализатор
+        serializer = CarouselSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            logger.debug(f"Данные по запросу 0x7a успешно сохранены")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
     else:
         try:
             carousel_post = Carousel.objects.filter(post_number=post_number).first()
             carousel_post.is_empty = False
-            carousel_post.full_weight = weight_combined / 1000
+            carousel_post.full_weight = request.data.get('full_weight')
             carousel_post.save()
-            logger.debug(f"Отправка ответа от django...")
+            logger.debug(f"Данные по запросу 0x70 успешно сохранены")
             return Response(status=status.HTTP_200_OK)
         except Exception as error:
             logger.error(f'Ошибка при обработке запроса типа 0x70 - {error}')

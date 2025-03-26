@@ -1,6 +1,7 @@
 from crispy_forms.bootstrap import StrictButton
 from django import forms
-from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, AutoGasBatch)
+from django.utils import timezone
+from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, AutoGasBatch, CarouselSettings)
 from .models import GAS_TYPE_CHOICES, BATCH_TYPE_CHOICES, BALLOON_SIZE_CHOICES
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout
@@ -22,16 +23,51 @@ USER_STATUS_LIST = [
 
 
 class GetBalloonsAmount(forms.Form):
-    date = forms.CharField(max_length=10, label="Дата", widget=forms.DateInput(attrs={
-        'class': 'form-control',
-        'type': 'date'
-    }))
+    start_date = forms.DateField(
+        label="Начальная дата",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        initial=timezone.now().date()
+    )
+    end_date = forms.DateField(
+        label="Конечная дата",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        initial=timezone.now().date()
+    )
 
-    def clean_data(self):
-        date_data = self.cleaned_data["date"]
-        if date_data is None or len(date_data) != 10:
-            raise forms.ValidationError("Поле не может быть пустым")
-        return date_data
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_class = 'form-horizontal'
+        self.helper.label_class = 'col-lg-4'
+        self.helper.field_class = 'col-lg-8'
+        self.helper.form_method = 'POST'
+
+
+class GetCarouselBalloonsAmount(forms.Form):
+    start_date = forms.DateField(
+        label="Начальная дата",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        initial=timezone.now().date()
+    )
+    end_date = forms.DateField(
+        label="Конечная дата",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        initial=timezone.now().date()
+    )
+    size = forms.ChoiceField(
+        label="Объем баллона",
+        choices=[('', 'Все объемы')] + list(BALLOON_SIZE_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_class = 'form-horizontal'
+        self.helper.label_class = 'col-lg-4'
+        self.helper.field_class = 'col-lg-8'
+        self.helper.form_method = 'POST'
 
 
 class BalloonForm(forms.ModelForm):
@@ -66,6 +102,47 @@ class BalloonForm(forms.ModelForm):
             'wall_thickness': forms.NumberInput(attrs={'class': 'form-control'}),
             'filling_status': forms.CheckboxInput(attrs={'class': 'form-control'}),
             'update_passport_required': forms.CheckboxInput(attrs={'class': 'form-control'})
+        }
+
+
+class CarouselSettingsForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_class = 'form-horizontal'
+        self.helper.label_class = 'col-lg-4'
+        self.helper.field_class = 'col-lg-8'
+        self.helper.add_input(Submit('Сохранить', 'Сохранить', css_class='btn btn-success'))
+        self.helper.form_method = 'POST'
+
+    class Meta:
+        model = CarouselSettings
+        fields = '__all__'
+        widgets = {
+            'read_only': forms.CheckboxInput(attrs={'class': 'form-control'}),
+            'use_weight_management': forms.CheckboxInput(attrs={'class': 'form-control'}),
+            'weight_correction_value': forms.NumberInput(attrs={'class': 'form-control'}),
+            'use_common_correction': forms.CheckboxInput(attrs={'class': 'form-control'}),
+            'post_1_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_2_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_3_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_4_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_5_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_6_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_7_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_8_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_9_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_10_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_11_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_12_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_13_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_14_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_15_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_16_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_17_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_18_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_19_correction': forms.NumberInput(attrs={'class': 'form-control'}),
+            'post_20_correction': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
 
