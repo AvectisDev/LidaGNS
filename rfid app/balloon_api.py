@@ -43,7 +43,7 @@ def put_carousel_data(data: dict, session: requests.Session):
     """
     try:
         logger.debug(f"balloon_api данные поста отправлены - {data}")
-        response = session.post(f"{BASE_URL}/carousel-update", json=data, timeout=1)
+        response = session.post(f"{BASE_URL}/carousel/balloon-update/", json=data, timeout=3)
         logger.debug(f"balloon_api данные поста получены - {response}")
         response.raise_for_status()
         if response.content:

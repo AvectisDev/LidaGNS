@@ -26,12 +26,17 @@ balloons_amount_router.register(r'balloons-amount', balloons.BalloonAmountViewSe
 auto_gas_router = DefaultRouter()
 auto_gas_router.register(r'auto-gas', transport.AutoGasBatchView, basename='auto-gas')
 
+#carousel urls
+carousel_router = DefaultRouter()
+carousel_router.register(r'carousel', balloons.CarouselViewSet, basename='carousel')
+
 urlpatterns = [
     path('', include(balloons_router.urls)),
     path('balloon-status-options', balloons.get_balloon_status_options),
     path('loading-balloon-reader-list', balloons.get_loading_balloon_reader_list),
     path('unloading-balloon-reader-list', balloons.get_unloading_balloon_reader_list),
-    path('carousel-update', balloons.update_from_carousel),
+
+    # path('carousel-update', balloons.update_from_carousel),
 
     path('trucks', transport.TruckView.as_view()),
     path('trailers', transport.TrailerView.as_view()),
@@ -42,6 +47,8 @@ urlpatterns = [
     path('', include(balloons_amount_router.urls)),
 
     path('', include(auto_gas_router.urls)),
+
+    path('', include(carousel_router.urls)),
 
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
