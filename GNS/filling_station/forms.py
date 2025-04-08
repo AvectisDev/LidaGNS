@@ -1,7 +1,8 @@
 from crispy_forms.bootstrap import StrictButton
 from django import forms
 from django.utils import timezone
-from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, AutoGasBatch, CarouselSettings)
+from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, AutoGasBatch,
+                     CarouselSettings)
 from .models import GAS_TYPE_CHOICES, BATCH_TYPE_CHOICES, BALLOON_SIZE_CHOICES
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout
