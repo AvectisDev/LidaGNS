@@ -48,7 +48,7 @@ urlpatterns = [
 
     path('batch/auto-gas', views.AutoGasBatchListView.as_view(), name="auto_gas_batch_list"),
     path('batch/auto-gas/<pk>/', views.AutoGasBatchDetailView.as_view(), name="auto_gas_batch_detail"),
-    path('batch/auto-gas/<pk>/update/', views.AutoGasBatchUpdateView.as_view(), name="auto_gas_batch_update"),
+    path('batch/auto-gas/<pk>/update/', views.AutoGasBatchUpdateView.as_view(), name="auto_gas_batch_update", ),
     path('batch/auto-gas/<pk>/delete/', views.AutoGasBatchDeleteView.as_view(), name="auto_gas_batch_delete"),
 
     path('ttn', views.TTNView.as_view(), name="ttn_list"),
@@ -81,5 +81,8 @@ urlpatterns = [
 
     path('carousel/<int:carousel_number>/', views.carousel_info, name='carousel_info'),
     path('carousel-settings/', views.CarouselSettingsDetailView.as_view(), name='carousel_settings_detail'),
-    path('carousel-settings/update/', views.CarouselSettingsUpdateView.as_view(), name='carousel_settings_update'),
+    path('carousel-settings/update/', views.CarouselSettingsUpdateView.as_view(extra_context={
+        "title": "Редактирование настроек карусели"
+    }),
+         name='carousel_settings_update'),
 ]
