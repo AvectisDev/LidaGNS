@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                     AutoGasBatch, TruckType, TrailerType, Carousel)
+                     AutoGasBatch, TruckType, TrailerType, Carousel, MobileApp)
 from import_export import resources
+from django.utils.html import format_html
 
 
 class BalloonResources(resources.ModelResource):
@@ -85,3 +86,17 @@ class AutoGasBatchAdmin(admin.ModelAdmin):
                     'scale_empty_weight', 'scale_full_weight', 'weight_gas_amount', 'is_active', 'ttn']
     list_filter = ['begin_date', 'end_date', 'is_active']
     search_fields = ['begin_date', 'end_date', 'truck', 'is_active', 'ttn']
+
+
+@admin.register(MobileApp)
+class MobileAppAdmin(admin.ModelAdmin):
+    list_display = ['version_name', 'apk_file_link', 'update_date']
+    readonly_fields = ['update_date']
+    list_filter = ['update_date']
+    search_fields = ['version_name']
+
+    def apk_file_link(self, obj):
+        if obj.apk_file:
+            return format_html('<a href="{0}">Скачать APK</a>', obj.apk_file.url)
+        return "Нет файла"
+    apk_file_link.short_description = "APK файл"

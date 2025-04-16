@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from ..models import (Balloon, Carousel, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                      AutoGasBatch, BalloonAmount, CarouselSettings)
+                      AutoGasBatch, BalloonAmount, CarouselSettings, MobileApp)
 
 
 class BalloonSerializer(serializers.ModelSerializer):
@@ -119,3 +119,14 @@ class BalloonAmountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BalloonAmount
         fields = '__all__'
+
+
+class MobileAppSerializer(serializers.ModelSerializer):
+    apk_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MobileApp
+        fields = ['version_name', 'apk_url', 'update_date']
+
+    def get_apk_url(self, obj):
+        return self.context['request'].build_absolute_uri(obj.apk_file.url)
