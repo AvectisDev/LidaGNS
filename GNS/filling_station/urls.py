@@ -46,11 +46,6 @@ urlpatterns = [
     path('batch/balloons-unloading/<pk>/delete/', views.BalloonUnloadingBatchDeleteView.as_view(),
          name="balloon_unloading_batch_delete"),
 
-    path('batch/auto-gas', views.AutoGasBatchListView.as_view(), name="auto_gas_batch_list"),
-    path('batch/auto-gas/<pk>/', views.AutoGasBatchDetailView.as_view(), name="auto_gas_batch_detail"),
-    path('batch/auto-gas/<pk>/update/', views.AutoGasBatchUpdateView.as_view(), name="auto_gas_batch_update"),
-    path('batch/auto-gas/<pk>/delete/', views.AutoGasBatchDeleteView.as_view(), name="auto_gas_batch_delete"),
-
     path('ttn', views.TTNView.as_view(), name="ttn_list"),
     path('ttn/create', views.TTNCreateView.as_view(), name="ttn_create"),
     path('ttn/<pk>', views.TTNDetailView.as_view(), name="ttn_detail"),
@@ -70,16 +65,10 @@ urlpatterns = [
          name="truck_update"),
     path('transport/trucks/<pk>/delete/', views.TruckDeleteView.as_view(), name="truck_delete"),
 
-    path('transport/trailers', views.TrailerView.as_view(), name="trailer_list"),
-    path('transport/trailers/create', views.TrailerCreateView.as_view(), name="trailer_create"),
-    path('transport/trailers/<pk>', views.TrailerDetailView.as_view(), name="trailer_detail"),
-    path('transport/trailers/<pk>/update/', views.TrailerUpdateView.as_view(extra_context={
-        "title": "Редактирование прицепа"
-    }),
-         name="trailer_update"),
-    path('transport/trailers/<pk>/delete/', views.TrailerDeleteView.as_view(), name="trailer_delete"),
-
     path('carousel/<int:carousel_number>/', views.carousel_info, name='carousel_info'),
     path('carousel-settings/', views.CarouselSettingsDetailView.as_view(), name='carousel_settings_detail'),
-    path('carousel-settings/update/', views.CarouselSettingsUpdateView.as_view(), name='carousel_settings_update'),
+    path('carousel-settings/update/', views.CarouselSettingsUpdateView.as_view(extra_context={
+        "title": "Редактирование настроек карусели"
+    }),
+         name='carousel_settings_update'),
 ]

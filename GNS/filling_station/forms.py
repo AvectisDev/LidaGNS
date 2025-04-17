@@ -1,7 +1,6 @@
-from crispy_forms.bootstrap import StrictButton
 from django import forms
 from django.utils import timezone
-from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, AutoGasBatch, CarouselSettings)
+from .models import Balloon, Truck, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, CarouselSettings
 from .models import GAS_TYPE_CHOICES, BATCH_TYPE_CHOICES, BALLOON_SIZE_CHOICES
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout
@@ -179,40 +178,6 @@ class TruckForm(forms.ModelForm):
         }
 
 
-class TrailerForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.helper = FormHelper()
-        self.helper.form_class = 'form-horizontal'
-        self.helper.label_class = 'col-lg-4'
-        self.helper.field_class = 'col-lg-8'
-        self.helper.add_input(Submit('Сохранить', 'Сохранить', css_class='btn btn-success'))
-        self.helper.form_method = 'POST'
-
-    class Meta:
-        model = Trailer
-        fields = ['truck', 'trailer_brand', 'registration_number', 'type', 'capacity_cylinders',
-                  'max_weight_of_transported_cylinders', 'max_mass_of_transported_gas', 'max_gas_volume', 'empty_weight',
-                  'full_weight', 'is_on_station', 'entry_date', 'entry_time', 'departure_date', 'departure_time']
-        widgets = {
-            'truck': forms.Select(attrs={'class': 'form-control'}),
-            'trailer_brand': forms.TextInput(attrs={'class': 'form-control'}),
-            'registration_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'type': forms.Select(attrs={'class': 'form-control'}),
-            'capacity_cylinders': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_weight_of_transported_cylinders': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_mass_of_transported_gas': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_gas_volume': forms.NumberInput(attrs={'class': 'form-control'}),
-            'empty_weight': forms.NumberInput(attrs={'class': 'form-control'}),
-            'full_weight': forms.NumberInput(attrs={'class': 'form-control'}),
-            'is_on_station': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'entry_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
-            'entry_time': forms.TimeInput(attrs={'type': 'time'}),
-            'departure_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
-            'departure_time': forms.TimeInput(attrs={'type': 'time'})
-        }
-
-
 class TTNForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -297,36 +262,6 @@ class BalloonsUnloadingBatchForm(forms.ModelForm):
             'amount_of_27_liters': forms.NumberInput(attrs={'class': 'form-control'}),
             'amount_of_50_liters': forms.NumberInput(attrs={'class': 'form-control'}),
             'gas_amount': forms.NumberInput(attrs={'class': 'form-control'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'ttn': forms.Select(attrs={'class': 'form-control'})
-        }
-
-
-class AutoGasBatchForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.helper = FormHelper()
-        self.helper.form_class = 'form-horizontal'
-        self.helper.label_class = 'col-lg-4'
-        self.helper.field_class = 'col-lg-8'
-        self.helper.add_input(Submit('Сохранить', 'Сохранить', css_class='btn btn-success'))
-        self.helper.form_method = 'POST'
-
-    class Meta:
-        model = AutoGasBatch
-        fields = ['batch_type', 'end_date', 'end_time', 'truck', 'trailer', 'gas_amount', 'gas_type',
-                  'scale_empty_weight', 'scale_full_weight', 'weight_gas_amount', 'is_active', 'ttn']
-        widgets = {
-            'batch_type': forms.Select(choices=BATCH_TYPE_CHOICES, attrs={'class': 'form-control'}),
-            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
-            'end_time': forms.TimeInput(attrs={'type': 'time'}),
-            'truck': forms.Select(attrs={'class': 'form-control'}),
-            'trailer': forms.Select(attrs={'class': 'form-control'}),
-            'gas_amount': forms.NumberInput(attrs={'class': 'form-control'}),
-            'gas_type': forms.Select(choices=GAS_TYPE_CHOICES, attrs={'class': 'form-control'}),
-            'scale_empty_weight': forms.NumberInput(attrs={'class': 'form-control'}),
-            'scale_full_weight': forms.NumberInput(attrs={'class': 'form-control'}),
-            'weight_gas_amount': forms.NumberInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'ttn': forms.Select(attrs={'class': 'form-control'})
         }
