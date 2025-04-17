@@ -151,7 +151,7 @@ class BalloonViewSet(viewsets.ViewSet):
             if reader_number in [7, 8]:
                 cache_key = f'reader_{reader_number}_balloon_stack'
                 stack = cache.get(cache_key, [])
-                logger.debug(f'Метка на {reader_number} считывателе. Исходный стек = {stack}')
+
                 # Добавляем объект в стек
                 stack.insert(0, {
                     'number': reader_balloon.number,
