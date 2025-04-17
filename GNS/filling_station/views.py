@@ -4,12 +4,13 @@ from django.core.paginator import Paginator
 from django.urls import reverse_lazy, reverse
 from django.views import generic
 from django.db.models import Q, Sum
-from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                     BalloonAmount, AutoGasBatch, Reader, Carousel, CarouselSettings)
+from .models import (Balloon, Truck, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
+                     BalloonAmount, Reader, Carousel, CarouselSettings)
 from .admin import BalloonResources, CarouselResources
-from .forms import (GetBalloonsAmount, BalloonForm, TruckForm, TrailerForm, TTNForm, GetCarouselBalloonsAmount,
-                    BalloonsLoadingBatchForm, BalloonsUnloadingBatchForm, AutoGasBatchForm, CarouselSettingsForm)
+from .forms import (GetBalloonsAmount, BalloonForm, TruckForm, TTNForm, GetCarouselBalloonsAmount,
+                    BalloonsLoadingBatchForm, BalloonsUnloadingBatchForm, CarouselSettingsForm)
 from datetime import datetime, timedelta
+
 
 STATUS_LIST = {
     1: 'Погрузка полного баллона на трал 1',
@@ -271,31 +272,6 @@ class BalloonUnloadingBatchDeleteView(generic.DeleteView):
     template_name = 'filling_station/balloons_unloading_batch_confirm_delete.html'
 
 
-# Партии автоцистерн
-class AutoGasBatchListView(generic.ListView):
-    model = AutoGasBatch
-    paginate_by = 10
-    template_name = 'filling_station/auto_batch_list.html'
-
-
-class AutoGasBatchDetailView(generic.DetailView):
-    model = AutoGasBatch
-    context_object_name = 'batch'
-    template_name = 'filling_station/auto_batch_detail.html'
-
-
-class AutoGasBatchUpdateView(generic.UpdateView):
-    model = AutoGasBatch
-    form_class = AutoGasBatchForm
-    template_name = 'filling_station/_equipment_form.html'
-
-
-class AutoGasBatchDeleteView(generic.DeleteView):
-    model = AutoGasBatch
-    success_url = reverse_lazy("filling_station:auto_gas_batch_list")
-    template_name = 'filling_station/auto_batch_confirm_delete.html'
-
-
 # Грузовики
 class TruckView(generic.ListView):
     model = Truck
@@ -323,35 +299,6 @@ class TruckDeleteView(generic.DeleteView):
     model = Truck
     success_url = reverse_lazy("filling_station:truck_list")
     template_name = 'filling_station/truck_confirm_delete.html'
-
-
-# Прицепы
-class TrailerView(generic.ListView):
-    model = Trailer
-    paginate_by = 10
-
-
-class TrailerDetailView(generic.DetailView):
-    model = Trailer
-
-    
-class TrailerCreateView(generic.CreateView):
-    model = Trailer
-    form_class = TrailerForm
-    template_name = 'filling_station/_equipment_form.html'
-    success_url = reverse_lazy("filling_station:trailer_list")
-
-
-class TrailerUpdateView(generic.UpdateView):
-    model = Trailer
-    form_class = TrailerForm
-    template_name = 'filling_station/_equipment_form.html'
-
-
-class TrailerDeleteView(generic.DeleteView):
-    model = Trailer
-    success_url = reverse_lazy("filling_station:trailer_list")
-    template_name = 'filling_station/trailer_confirm_delete.html'
 
 
 # ТТН

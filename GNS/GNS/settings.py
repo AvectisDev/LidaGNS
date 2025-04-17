@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'filling_station.apps.FillingStationConfig',
+    'mobile.apps.MobileConfig',
     'import_export',
     'rest_framework',
     'rest_framework_simplejwt',

@@ -1,5 +1,4 @@
 from django.db import models
-from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.urls import reverse
 import pghistory
@@ -206,6 +205,7 @@ class Truck(models.Model):
 
     def get_delete_url(self):
         return reverse('filling_station:truck_delete', args=[self.pk])
+
 
 
 class TrailerType(models.Model):
@@ -419,55 +419,3 @@ class BalloonsUnloadingBatch(models.Model):
         ]
         total_amount = sum(amounts)
         return total_amount
-
-
-class AutoGasBatch(models.Model):
-    batch_type = models.CharField(max_length=10, choices=BATCH_TYPE_CHOICES, default='u', verbose_name="Тип партии")
-    begin_date = models.DateField(null=True, blank=True, auto_now_add=True, verbose_name="Дата начала приёмки")
-    begin_time = models.TimeField(null=True, blank=True, auto_now_add=True, verbose_name="Время начала приёмки")
-    end_date = models.DateField(null=True, blank=True, verbose_name="Дата окончания приёмки")
-    end_time = models.TimeField(null=True, blank=True, verbose_name="Время окончания приёмки")
-    truck = models.ForeignKey(Truck, on_delete=models.DO_NOTHING, verbose_name="Автомобиль")
-    trailer = models.ForeignKey(Trailer, on_delete=models.DO_NOTHING, null=True, blank=True, default=0,
-                                verbose_name="Прицеп")
-    gas_amount = models.FloatField(null=True, blank=True, verbose_name="Количество газа (массомер)")
-    gas_type = models.CharField(max_length=10, choices=GAS_TYPE_CHOICES, default='Не выбран', verbose_name="Тип газа")
-    scale_empty_weight = models.FloatField(null=True, blank=True, verbose_name="Вес пустого т/с (весы)")
-    scale_full_weight = models.FloatField(null=True, blank=True, verbose_name="Вес полного т/с (весы)")
-    weight_gas_amount = models.FloatField(null=True, blank=True, verbose_name="Количество газа (весы)")
-    is_active = models.BooleanField(null=True, blank=True, verbose_name="В работе")
-    ttn = models.ForeignKey(TTN, on_delete=models.DO_NOTHING, default=0, verbose_name="ТТН")
-    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, default=1, verbose_name="Пользователь")
-
-    class Meta:
-        verbose_name = "Автоколонка"
-        verbose_name_plural = "Автоколонка"
-        ordering = ['-begin_date', '-begin_time']
-
-    def get_absolute_url(self):
-        return reverse('filling_station:auto_gas_batch_detail', args=[self.pk])
-
-    def get_update_url(self):
-        return reverse('filling_station:auto_gas_batch_update', args=[self.pk])
-
-    def get_delete_url(self):
-        return reverse('filling_station:auto_gas_batch_delete', args=[self.pk])
-
-
-class MobileApp(models.Model):
-    version_name = models.CharField(max_length=10, unique=True, verbose_name="Номер версии")
-    apk_file = models.FileField(upload_to='apk/', verbose_name="APK файл")
-    update_date = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
-
-    class Meta:
-        verbose_name = "Версия мобильного приложения"
-        verbose_name_plural = "Версии мобильного приложения"
-        ordering = ['-update_date']
-
-    def __str__(self):
-        return f"Версия {self.version_name}"
-
-    def clean(self):
-        super().clean()
-        if MobileApp.objects.filter(version_name=self.version_name).exclude(pk=self.pk).exists():
-            raise ValidationError({'version_name': 'Версия с таким номером уже существует!'})

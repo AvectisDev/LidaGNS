@@ -24,6 +24,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include("filling_station.urls", namespace='filling_station')),
     path('api/', include("filling_station.api.urls", namespace='api')),
+    path('api/', include("mobile.urls", namespace='api')),
 ] + debug_toolbar_urls()
 
 urlpatterns += [

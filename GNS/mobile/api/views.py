@@ -9,7 +9,7 @@ from django.http import FileResponse
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_app_version(request):
     latest_app = MobileApp.objects.order_by('-update_date').first()
     if not latest_app:
@@ -20,7 +20,7 @@ def get_app_version(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_app_apk(request):
     latest_app = MobileApp.objects.order_by('-update_date').first()
     if not latest_app:
@@ -28,7 +28,7 @@ def get_app_apk(request):
 
     try:
         file_path = latest_app.apk_file.path
-        apk_file_name = f"app_{latest_app.version_name}.apk"
+        apk_file_name = f"Lida_app_{latest_app.version_name}.apk"
 
         if not os.path.exists(file_path):
             return Response({"error": "APK file not found on server"}, status=404)

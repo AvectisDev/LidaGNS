@@ -1,8 +1,6 @@
 from django.contrib import admin
-from .models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                     AutoGasBatch, TruckType, TrailerType, Carousel, MobileApp)
+from .models import Balloon, Truck, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, TruckType, Carousel
 from import_export import resources
-from django.utils.html import format_html
 
 
 class BalloonResources(resources.ModelResource):
@@ -41,19 +39,6 @@ class TruckTypeAdmin(admin.ModelAdmin):
     list_display = ['id', 'type']
 
 
-@admin.register(Trailer)
-class TrailerAdmin(admin.ModelAdmin):
-    list_display = ['id', 'truck', 'trailer_brand', 'registration_number', 'type', 'capacity_cylinders',
-                    'max_weight_of_transported_cylinders', 'max_mass_of_transported_gas', 'max_gas_volume', 'empty_weight',
-                    'full_weight', 'is_on_station', 'entry_date', 'entry_time', 'departure_date', 'departure_time']
-    search_fields = ['trailer_brand', 'registration_number', 'type', 'is_on_station']
-
-
-@admin.register(TrailerType)
-class TrailerTypeAdmin(admin.ModelAdmin):
-    list_display = ['id', 'type']
-
-
 @admin.register(TTN)
 class TTNAdmin(admin.ModelAdmin):
     list_display = ['id', 'number', 'contract', 'shipper', 'consignee', 'gas_amount', 'gas_type', 'balloons_amount',
@@ -79,24 +64,3 @@ class BalloonsUnloadingBatchAdmin(admin.ModelAdmin):
     list_filter = ['begin_date', 'end_date', 'is_active']
     search_fields = ['begin_date', 'end_date', 'truck', 'is_active', 'ttn']
 
-
-@admin.register(AutoGasBatch)
-class AutoGasBatchAdmin(admin.ModelAdmin):
-    list_display = ['id', 'batch_type', 'end_date', 'end_time', 'truck', 'trailer', 'gas_amount', 'gas_type',
-                    'scale_empty_weight', 'scale_full_weight', 'weight_gas_amount', 'is_active', 'ttn']
-    list_filter = ['begin_date', 'end_date', 'is_active']
-    search_fields = ['begin_date', 'end_date', 'truck', 'is_active', 'ttn']
-
-
-@admin.register(MobileApp)
-class MobileAppAdmin(admin.ModelAdmin):
-    list_display = ['version_name', 'apk_file_link', 'update_date']
-    readonly_fields = ['update_date']
-    list_filter = ['update_date']
-    search_fields = ['version_name']
-
-    def apk_file_link(self, obj):
-        if obj.apk_file:
-            return format_html('<a href="{0}">Скачать APK</a>', obj.apk_file.url)
-        return "Нет файла"
-    apk_file_link.short_description = "APK файл"
