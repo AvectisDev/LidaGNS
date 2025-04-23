@@ -7,6 +7,7 @@ from django.core.cache import cache
 import json
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.conf import settings
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, action, authentication_classes, permission_classes
@@ -90,6 +91,74 @@ class BalloonViewSet(viewsets.ViewSet):
             self.logger.error(f'Ошибка в методе получения паспорта баллона из Мириады: {error}')
             return None
 
+    def send_status_to_miriada(self, send_type: str, nfc_tag: str, send_data: dict = None):
+        """
+        Метод для отправки статусов баллонов по NFC-метке в Мириаду.
+        Поддерживается 3 основных типа отправки (send_type):
+        filling - Наполнение баллона
+        registering_in_warehouse - Регистрация баллона на склад
+        loading_into_truck - Погрузка баллона в машину
+        """
+        send_urls = {
+            'filling': f'{settings.MIRIADA_API_POST_URL}/fillingballoon',
+            'registering_in_warehouse': f'{settings.MIRIADA_API_POST_URL}/balloontosklad',
+            'loading_into_truck': f'{settings.MIRIADA_API_POST_URL}/balloontocar',
+        }
+
+        headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+
+        payload = {
+            "nfctag": nfc_tag,
+            "realm": "grodnooblgas"
+        }
+
+        if send_data is not None:
+            fulness = send_data.get('fulness')  # 1-полный, 0 — пустой
+            if fulness:
+                payload.update({"fulness": fulness})
+
+            number_auto = send_data.get('number_auto')  # "AM 7881-2" номер машины.(Номер должен быть добавлен в  ПК «Автопарк»
+            type_car = send_data.get('type_car')    # 0-кассета, 1 — трал
+            if number_auto and type_car:
+                payload.update({
+                    "fulness": fulness,
+                    "number_auto": number_auto,
+                    "type_car": type_car
+                })
+
+        try:
+            # Создаем запрос в Мириаду
+            session = requests.Session()
+            req = requests.Request(
+                'POST',
+                send_urls.get(send_type),
+                auth=(settings.MIRIADA_AUTH_LOGIN, settings.MIRIADA_AUTH_PASSWORD),
+                headers=headers,
+                json=payload
+            )
+            prepared = session.prepare_request(req)
+
+            self.logger.debug(
+                f"Подготовленный запрос:\n"
+                f"URL: {prepared.url}\n"
+                f"Headers: {prepared.headers}\n"
+                f"Body: {prepared.body}"
+            )
+            self.logger.debug(f'Тело запроса: {payload}')
+
+            response = session.send(prepared, timeout=2)
+            response.raise_for_status()
+            if response.status_code == 200:
+                self.logger.info(f"Статус по {send_type} успешно отправлен")
+            else:
+                self.logger.warning(f"Ошибка по {send_type}! Код: {response.status_code}, Описание: {response.reason}")
+
+        except Exception as error:
+            self.logger.error(f'Ошибка в методе отправки статуса баллона в Мириаду: {error}')
+
     @action(detail=False, methods=['post'], url_path='update-by-reader')
     def update_by_reader(self, request):
         """
@@ -114,6 +183,15 @@ class BalloonViewSet(viewsets.ViewSet):
         reader_number = request.data.get('reader_number')
         if reader_number is None:
             self.logger.error("Номер ридера отсутствует в теле запроса")
+        elif reader_number == 8:
+            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='filling')
+        elif reader_number in [3, 4]:
+            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='registering_in_warehouse', send_data={'fulness': 0})
+        elif reader_number == 5:
+            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='registering_in_warehouse', send_data={'fulness': 1})
+        elif reader_number in [1, 2]:
+            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='loading_into_truck',
+                                        send_data={'fulness': 1, "type_car": 1, "number_auto": ' ', })
 
         # Если требуется обновление паспорта или идёт приёмка новых баллонов - выполняем запрос в Мириаду
         if balloon.update_passport_required in (True, None) or reader_number in [3, 4]:
@@ -288,7 +366,8 @@ class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='active')
     def is_active(self, request):
         batches = BalloonsLoadingBatch.objects.filter(is_active=True)
-        serializer = ActiveLoadingBatchSerializer(batches, many=True)
+        # serializer = ActiveLoadingBatchSerializer(batches, many=True)
+        serializer = BalloonsLoadingBatchSerializer(batches, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='last-active')
@@ -370,7 +449,8 @@ class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='active')
     def is_active(self, request):
         batches = BalloonsUnloadingBatch.objects.filter(is_active=True)
-        serializer = ActiveUnloadingBatchSerializer(batches, many=True)
+        # serializer = ActiveUnloadingBatchSerializer(batches, many=True)
+        serializer = BalloonsUnloadingBatchSerializer(batches, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='last-active')
