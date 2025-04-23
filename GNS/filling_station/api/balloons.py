@@ -366,8 +366,7 @@ class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='active')
     def is_active(self, request):
         batches = BalloonsLoadingBatch.objects.filter(is_active=True)
-        # serializer = ActiveLoadingBatchSerializer(batches, many=True)
-        serializer = BalloonsLoadingBatchSerializer(batches, many=True)
+        serializer = ActiveLoadingBatchSerializer(batches, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='last-active')
@@ -449,8 +448,7 @@ class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='active')
     def is_active(self, request):
         batches = BalloonsUnloadingBatch.objects.filter(is_active=True)
-        # serializer = ActiveUnloadingBatchSerializer(batches, many=True)
-        serializer = BalloonsUnloadingBatchSerializer(batches, many=True)
+        serializer = ActiveUnloadingBatchSerializer(batches, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='last-active')
