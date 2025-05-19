@@ -22,10 +22,6 @@ balloons_router.register(r'balloons', balloons.BalloonViewSet, basename='balloon
 balloons_amount_router = DefaultRouter()
 balloons_amount_router.register(r'balloons-amount', balloons.BalloonAmountViewSet, basename='balloonamount')
 
-#carousel urls
-carousel_router = DefaultRouter()
-carousel_router.register(r'carousel', balloons.CarouselViewSet, basename='carousel')
-
 urlpatterns = [
     path('', include(balloons_router.urls)),
     path('balloon-status-options', balloons.get_balloon_status_options),
@@ -42,9 +38,6 @@ urlpatterns = [
 
     path('', include(balloons_amount_router.urls)),
 
-    path('', include(carousel_router.urls)),
-
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
 ]

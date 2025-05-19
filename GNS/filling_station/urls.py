@@ -64,11 +64,4 @@ urlpatterns = [
          }),
          name="truck_update"),
     path('transport/trucks/<pk>/delete/', views.TruckDeleteView.as_view(), name="truck_delete"),
-
-    path('carousel/<int:carousel_number>/', views.carousel_info, name='carousel_info'),
-    path('carousel-settings/', views.CarouselSettingsDetailView.as_view(), name='carousel_settings_detail'),
-    path('carousel-settings/update/', views.CarouselSettingsUpdateView.as_view(extra_context={
-        "title": "Редактирование настроек карусели"
-    }),
-         name='carousel_settings_update'),
 ]

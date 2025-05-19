@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = os.environ.get('DEBUG')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248', '172.20.130.60', '10.0.2.2']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248', '10.0.2.2']
 
 # Application definition
 
@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'filling_station.apps.FillingStationConfig',
     'mobile.apps.MobileConfig',
+    'carousel.apps.CarouselConfig',
     'import_export',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -176,12 +177,12 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_BEAT_SCHEDULE = {
-    'send_to_opc': {
-        'task': 'filling_station.tasks.send_to_opc',
-        'schedule': 10.0,  # каждый час
-    },
-}
+# CELERY_BEAT_SCHEDULE = {
+#     'send_to_opc': {
+#         'task': 'filling_station.tasks.send_to_opc',
+#         'schedule': 10.0,  # каждый час
+#     },
+# }
 
 LOGGING = {
     'version': 1,
