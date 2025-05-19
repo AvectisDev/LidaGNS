@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='carousel.log',
+    filename='balloon_api.log',
     filemode='w',
     encoding='utf-8'
 )
@@ -32,7 +32,7 @@ async def update_balloon(data):
             return data
 
 
-def put_carousel_data(data: dict):
+def put_carousel_data(data: dict, session: requests.Session):
     """
     Функция работает как шлюз между сервером и постом наполнения, т.к. пост может слать запрос только через COM-порт в
     виде набора байт по проприетарному протоколу. Функция отправляет POST-запрос с текущими показаниями поста карусели
@@ -42,11 +42,11 @@ def put_carousel_data(data: dict):
     :return: возвращает словарь со статусом ответа и весом баллона
     """
     try:
-        logger.debug(f"balloon_api данные отправлены - {data}")
-        response = requests.post(f"{BASE_URL}/carousel-update", json=data, timeout=1)
-        logger.debug(f"balloon_api данные получены - {response}")
+        logger.debug(f"balloon_api данные поста отправлены - {data}")
+        response = session.post(f"{BASE_URL}/carousel/balloon-update/", json=data, timeout=3)
+        logger.debug(f"balloon_api данные поста получены - {response}")
         response.raise_for_status()
-        if response.content:  # Если ответ не пустой
+        if response.content:
             return response.json()
         else:
             return {}

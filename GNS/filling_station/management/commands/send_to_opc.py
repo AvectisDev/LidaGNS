@@ -11,7 +11,6 @@ class Command(BaseCommand):
 
     def __init__(self):
         super().__init__()
-        # self.client = Client("opc.tcp://host.docker.internal:4841")
         self.client = Client("opc.tcp://192.168.100.54:4840")
 
     def add_arguments(self, parser):
@@ -31,7 +30,6 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Dict[str, Any]) -> None:
         try:
             self.client.connect()
-            logger.info('Connect to OPC server successful')
 
             reader = options['reader']
             blink = options['blink']
@@ -50,4 +48,3 @@ class Command(BaseCommand):
             logger.error(f'reader-{reader}, type of reader-{type(reader)};blink-{blink}, type of blink-{type(blink)}')
         finally:
             self.client.disconnect()
-            logger.info('Disconnect from OPC server')

@@ -7,5 +7,4 @@ logger = logging.getLogger('filling_station')
 
 @shared_task
 def send_to_opc(reader, blink):
-    # logger.info('таска send_to_opc выполняется...')
     call_command('send_to_opc', reader=reader, blink=blink)

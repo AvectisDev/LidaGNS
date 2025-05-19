@@ -8,6 +8,9 @@ GNS/filling_station/__pycache__/
 GNS/GNS/__pycache__/
 GNS/filling_station/migrations/__pycache__/
 
+GNS/media/
+GNS/static/
+
 # C extensions
 *.so
 

@@ -15,9 +15,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
-DEBUG = True
+DEBUG = os.environ.get('DEBUG')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248', '10.0.2.2']
 
 # Application definition
 
@@ -30,6 +30,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'filling_station.apps.FillingStationConfig',
+    'mobile.apps.MobileConfig',
+    'carousel.apps.CarouselConfig',
     'import_export',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -111,7 +113,8 @@ DATABASES = {
         'USER': os.environ.get('DB_USER'),
         'PASSWORD': os.environ.get('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST'),
-        'PORT': os.environ.get('DB_PORT')
+        'PORT': os.environ.get('DB_PORT'),
+        'CONN_MAX_AGE': 600,  # Соединение будет жить 10 минут
     }
 }
 
@@ -161,6 +164,9 @@ STATICFILES_DIR = [
     Path.joinpath(BASE_DIR, 'filling_station/static/filling_station')
 ]
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -171,19 +177,19 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_BEAT_SCHEDULE = {
-    'send_to_opc': {
-        'task': 'filling_station.tasks.send_to_opc',
-        'schedule': 10.0,  # каждый час
-    },
-}
+# CELERY_BEAT_SCHEDULE = {
+#     'send_to_opc': {
+#         'task': 'filling_station.tasks.send_to_opc',
+#         'schedule': 10.0,  # каждый час
+#     },
+# }
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '%(asctime)s - %(levelname)s - %(message)s',
+            'format': '%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
     },
@@ -203,3 +209,7 @@ LOGGING = {
         },
     },
 }
+
+MIRIADA_API_POST_URL = os.environ.get('MIRIADA_API_POST_URL')
+MIRIADA_AUTH_LOGIN = os.environ.get('MIRIADA_AUTH_LOGIN')
+MIRIADA_AUTH_PASSWORD = os.environ.get('MIRIADA_AUTH_PASSWORD')
