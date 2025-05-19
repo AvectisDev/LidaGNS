@@ -1,20 +1,42 @@
 from django.contrib import admin
-from .models import Balloon, Truck, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch, TruckType
+from .models import Balloon, Truck, TruckType, Trailer, TrailerType, BalloonsLoadingBatch, BalloonsUnloadingBatch
 from import_export import resources
 
 
 class BalloonResources(resources.ModelResource):
     class Meta:
         model = Balloon
-        fields = ['nfc_tag', 'serial_number', 'size', 'netto', 'brutto', 'filling_status', "change_date", "change_time"]
+        fields = [
+            'nfc_tag',
+            'serial_number',
+            'size',
+            'netto',
+            'brutto',
+            'filling_status',
+            "change_date"
+        ]
 
 
 @admin.register(Balloon)
 class BalloonAdmin(admin.ModelAdmin):
-    list_display = ['id', 'nfc_tag', 'serial_number', 'creation_date', 'size', 'netto', 'brutto',
-                    'current_examination_date', 'next_examination_date', 'diagnostic_date', 'working_pressure',
-                    'status', 'manufacturer', 'wall_thickness', 'filling_status', 'update_passport_required']
-    search_fields = ['nfc_tag', 'serial_number', 'creation_date', 'size', 'manufacturer']
+    list_display = [
+        'nfc_tag',
+        'serial_number',
+        'creation_date',
+        'size',
+        'netto',
+        'brutto',
+        'current_examination_date',
+        'next_examination_date',
+        'diagnostic_date',
+        'working_pressure',
+        'status',
+        'manufacturer',
+        'wall_thickness',
+        'filling_status',
+        'update_passport_required'
+    ]
+    search_fields = ['nfc_tag', 'serial_number', 'size', 'manufacturer']
 
 
 @admin.register(Truck)
@@ -31,28 +53,51 @@ class TruckTypeAdmin(admin.ModelAdmin):
     list_display = ['id', 'type']
 
 
-@admin.register(TTN)
-class TTNAdmin(admin.ModelAdmin):
-    list_display = ['id', 'number', 'contract', 'shipper', 'consignee', 'gas_amount', 'gas_type', 'balloons_amount',
-                    'date']
-    search_fields = ['number', 'contract', 'name_of_supplier', 'date']
-    list_filter = ['date']
-
-
 @admin.register(BalloonsLoadingBatch)
 class BalloonsLoadingBatchAdmin(admin.ModelAdmin):
-    list_display = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                    'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                    'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn']
+    list_display = [
+        'id',
+        'begin_date',
+        'begin_time',
+        'end_date',
+        'end_time',
+        'truck',
+        'trailer',
+        'reader_number',
+        'amount_of_rfid',
+        'amount_of_5_liters',
+        'amount_of_12_liters',
+        'amount_of_27_liters',
+        'amount_of_50_liters',
+        'gas_amount',
+        'is_active',
+        'ttn',
+        'amount_of_ttn'
+    ]
     list_filter = ['begin_date', 'end_date', 'is_active']
-    search_fields = ['begin_date', 'end_date', 'truck', 'is_active', 'ttn']
+    search_fields = ['truck', 'is_active', 'ttn']
 
 
 @admin.register(BalloonsUnloadingBatch)
 class BalloonsUnloadingBatchAdmin(admin.ModelAdmin):
-    list_display = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                    'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                    'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn']
+    list_display = [
+        'id',
+        'begin_date',
+        'begin_time',
+        'end_date',
+        'end_time',
+        'truck',
+        'trailer',
+        'reader_number',
+        'amount_of_rfid',
+        'amount_of_5_liters',
+        'amount_of_12_liters',
+        'amount_of_27_liters',
+        'amount_of_50_liters',
+        'gas_amount',
+        'is_active',
+        'ttn',
+        'amount_of_ttn'
+    ]
     list_filter = ['begin_date', 'end_date', 'is_active']
-    search_fields = ['begin_date', 'end_date', 'truck', 'is_active', 'ttn']
-
+    search_fields = ['truck', 'ttn']

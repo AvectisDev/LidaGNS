@@ -2,8 +2,9 @@ import logging
 from typing import Any, Dict
 from opcua import Client, ua
 from django.core.management.base import BaseCommand
+from django.conf import settings
 
-logger = logging.getLogger('filling_station')
+logger = logging.getLogger('celery')
 
 
 class Command(BaseCommand):
@@ -11,7 +12,7 @@ class Command(BaseCommand):
 
     def __init__(self):
         super().__init__()
-        self.client = Client("opc.tcp://192.168.100.54:4840")
+        self.client = Client(settings.OPC_SERVER_URL)
 
     def add_arguments(self, parser):
         parser.add_argument('--reader', type=int, help='Reader number')

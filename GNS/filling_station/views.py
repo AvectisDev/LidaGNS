@@ -1,16 +1,20 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.paginator import Paginator
 from django.urls import reverse_lazy, reverse
 from django.views import generic
 from django.db.models import Q, Sum
-from .models import (Balloon, Truck, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
+from .models import (Balloon, Truck, BalloonsLoadingBatch, BalloonsUnloadingBatch,
                      BalloonAmount, Reader)
 from .admin import BalloonResources
-from .forms import (GetBalloonsAmount, BalloonForm, TruckForm, TTNForm,
-                    BalloonsLoadingBatchForm, BalloonsUnloadingBatchForm)
+from .forms import (
+    GetBalloonsAmount,
+    BalloonForm,
+    TruckForm,
+    BalloonsLoadingBatchForm,
+    BalloonsUnloadingBatchForm
+)
 from datetime import datetime, timedelta
-
 
 STATUS_LIST = {
     1: 'Погрузка полного баллона на трал 1',
@@ -122,7 +126,7 @@ def reader_info(request, reader=1):
         'end_date': end_date,
         'reader_status': STATUS_LIST[reader]
     }
-    return render(request, "rfid_tables.html", context)
+    return render(request, 'filling_station/rfid_tables.html', context)
 
 
 # Партии приёмки баллонов
@@ -189,7 +193,9 @@ class TruckCreateView(generic.CreateView):
     model = Truck
     form_class = TruckForm
     template_name = 'filling_station/_equipment_form.html'
-    success_url = reverse_lazy("filling_station:truck_list")
+
+    def get_success_url(self):
+        return self.object.get_absolute_url()
 
 
 class TruckUpdateView(generic.UpdateView):
@@ -204,30 +210,49 @@ class TruckDeleteView(generic.DeleteView):
     template_name = 'filling_station/truck_confirm_delete.html'
 
 
-# ТТН
-class TTNView(generic.ListView):
-    model = TTN
-    paginate_by = 10
+# Обработка данных для вкладки "Статистика"
+def statistic(request):
+    current_date = datetime.now().date()
 
+    if request.method == "POST":
+        form = GetBalloonsAmount(request.POST)
+        if form.is_valid():
+            start_date = form.cleaned_data['start_date']
+            end_date = form.cleaned_data['end_date']
+        else:
+            start_date = current_date
+            end_date = current_date
+    else:
+        form = GetBalloonsAmount()
+        start_date = current_date
+        end_date = current_date
 
-class TTNDetailView(generic.DetailView):
-    model = TTN
+    # Получаем общее количество баллонов для каждого ридера за период
+    readers_data = {
+        f'balloons_quantity_by_reader_{i}': BalloonAmount.objects.filter(
+            reader_id=i,
+            change_date__range=[start_date, end_date]
+        ).aggregate(total=Sum('amount_of_rfid'))['total'] or 0
+        for i in range(1, 9)
+    }
 
-    
-class TTNCreateView(generic.CreateView):
-    model = TTN
-    form_class = TTNForm
-    template_name = 'filling_station/_equipment_form.html'
-    success_url = reverse_lazy("filling_station:ttn_list")
+    # Получаем количество партий для каждой модели за период
+    batches_data = {
+        'balloons_loading_batches': BalloonsLoadingBatch.objects.filter(
+            begin_date__range=[start_date, end_date]
+        ).count(),
+        'balloons_unloading_batches': BalloonsUnloadingBatch.objects.filter(
+            begin_date__range=[start_date, end_date]
+        ).count(),
+    }
 
+    # Объединяем данные в контекст
+    context = {
+        **readers_data,
+        **batches_data,
+        'form': form,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
 
-class TTNUpdateView(generic.UpdateView):
-    model = TTN
-    form_class = TTNForm
-    template_name = 'filling_station/_equipment_form.html'
-
-
-class TTNDeleteView(generic.DeleteView):
-    model = TTN
-    success_url = reverse_lazy("filling_station:ttn_list")
-    template_name = 'filling_station/ttn_confirm_delete.html'
+    return render(request, "statistic.html", context)

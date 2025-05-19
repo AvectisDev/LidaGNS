@@ -1,14 +1,32 @@
 from rest_framework import serializers
-from ..models import (Balloon, Truck, Trailer, TTN, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                      BalloonAmount)
+from ..models import (
+    Balloon,
+    Truck,
+    Trailer,
+    BalloonsLoadingBatch,
+    BalloonsUnloadingBatch,
+    BalloonAmount
+)
 
 
 class BalloonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Balloon
-        fields = ['id', 'nfc_tag', 'serial_number', 'creation_date', 'size', 'netto', 'brutto',
-                  'current_examination_date', 'next_examination_date', 'status', 'manufacturer', 'wall_thickness',
-                  'filling_status', 'update_passport_required']
+        fields = [
+            'nfc_tag',
+            'serial_number',
+            'creation_date',
+            'size',
+            'netto',
+            'brutto',
+            'current_examination_date',
+            'next_examination_date',
+            'status',
+            'manufacturer',
+            'wall_thickness',
+            'filling_status',
+            'update_passport_required'
+        ]
 
 
 class TruckSerializer(serializers.ModelSerializer):
@@ -38,30 +56,55 @@ class TrailerSerializer(serializers.ModelSerializer):
         return obj.type.type
 
 
-class TTNSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TTN
-        fields = ['id', 'number', 'contract', 'shipper', 'consignee', 'gas_amount', 'gas_type', 'balloons_amount',
-                  'date']
-
-
 class BalloonsLoadingBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = BalloonsLoadingBatch
-        fields = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                  'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                  'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn', 'amount_of_ttn']
+        fields = [
+            'id',
+            'begin_date',
+            'begin_time',
+            'end_date',
+            'end_time',
+            'truck',
+            'trailer',
+            'reader_number',
+            'amount_of_rfid',
+            'amount_of_5_liters',
+            'amount_of_12_liters',
+            'amount_of_27_liters',
+            'amount_of_50_liters',
+            'gas_amount',
+            'is_active',
+            'ttn',
+            'amount_of_ttn'
+        ]
 
 
 class BalloonsUnloadingBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = BalloonsUnloadingBatch
-        fields = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                  'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                  'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn', 'amount_of_ttn']
+        fields = [
+            'id',
+            'begin_date',
+            'begin_time',
+            'end_date',
+            'end_time',
+            'truck',
+            'trailer',
+            'reader_number',
+            'amount_of_rfid',
+            'amount_of_5_liters',
+            'amount_of_12_liters',
+            'amount_of_27_liters',
+            'amount_of_50_liters',
+            'gas_amount',
+            'is_active',
+            'ttn',
+            'amount_of_ttn'
+        ]
 
 
-# # Кастомные сериализаторы для партий приёмки/отгрузки баллонов
+# Кастомные сериализаторы для партий приёмки/отгрузки баллонов
 class BalloonsTruckSerializer(serializers.ModelSerializer):
     class Meta:
         model = Truck

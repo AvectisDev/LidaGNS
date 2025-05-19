@@ -1,12 +1,10 @@
-from ..models import Truck, Trailer
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, action
 from rest_framework.permissions import IsAuthenticated
-from datetime import datetime, date
-from .serializers import (TruckSerializer, TrailerSerializer)
+from ..models import Truck, Trailer
+from .serializers import TruckSerializer, TrailerSerializer
 
 
 class TruckView(APIView):
