@@ -1,22 +1,29 @@
 import logging
 import requests
-from ..models import Balloon, BalloonAmount, BalloonsLoadingBatch, BalloonsUnloadingBatch, Reader
+from ..models import Balloon, Reader, BalloonAmount, BalloonsLoadingBatch, BalloonsUnloadingBatch
+from django.http import JsonResponse
+from django.db.models import Sum, Count
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
-import json
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.conf import settings
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, action, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from filling_station.tasks import send_to_opc
-from datetime import datetime, date, timedelta
-from .serializers import (BalloonSerializer, BalloonAmountSerializer,
-                          BalloonsLoadingBatchSerializer, BalloonsUnloadingBatchSerializer,
-                          ActiveLoadingBatchSerializer, ActiveUnloadingBatchSerializer,
-                          BalloonAmountLoadingSerializer, BalloonAmountUnloadingSerializer)
+from datetime import datetime, date
+from .serializers import (
+    BalloonSerializer,
+    BalloonAmountSerializer,
+    BalloonsLoadingBatchSerializer,
+    BalloonsUnloadingBatchSerializer,
+    ActiveLoadingBatchSerializer,
+    ActiveUnloadingBatchSerializer,
+    BalloonAmountLoadingSerializer,
+    BalloonAmountUnloadingSerializer
+)
 
 logger = logging.getLogger('filling_station')
 
@@ -202,7 +209,6 @@ class BalloonViewSet(viewsets.ViewSet):
                 balloon.netto = balloon_passport_from_miriada['netto']
                 balloon.brutto = balloon_passport_from_miriada['brutto']
                 balloon.filling_status = balloon_passport_from_miriada['status']
-                # Сохраняем модель
                 balloon.save()
 
         # Выполняем передачу данных в OPC сервер (лампочки на считывателях)
@@ -226,6 +232,9 @@ class BalloonViewSet(viewsets.ViewSet):
             )
             # Сохраняем баллон в кэш на каруселях наполнения №1 и 2)
             if reader_number in [7, 8]:
+                timeout_hours = 1
+                timeout_seconds = timeout_hours * 3600
+
                 cache_key = f'reader_{reader_number}_balloon_stack'
                 stack = cache.get(cache_key, [])
 
@@ -242,7 +251,7 @@ class BalloonViewSet(viewsets.ViewSet):
                 logger.debug(f'Стек считывателя {reader_number} = {stack}')
 
                 # Сохраняем обновленный стек в кэш
-                cache.set(cache_key, stack, timeout=None)
+                cache.set(cache_key, stack, timeout=timeout_seconds)
 
         serializer = BalloonSerializer(balloon)
         return Response(serializer.data)
@@ -266,6 +275,99 @@ class BalloonViewSet(viewsets.ViewSet):
             batch.amount_of_rfid = (batch.amount_of_rfid or 0) + 1
             batch.save()
 
+    @action(detail=False, methods=['get'], url_path='statistic')
+    def get_statistic(self, request):
+        cache_key = 'get_balloon_statistic'
+        cache_time = 600  # 10 минут
+        data = cache.get(cache_key)
+
+        if not data:
+            today = date.today()
+            first_day_of_month = today.replace(day=1)
+
+            # Баллонов за текущий месяц
+            balloons_monthly_stats = (BalloonAmount.objects
+                                      .filter(change_date__gte=first_day_of_month)
+                                      .order_by('reader_id')
+                                      .values('reader_id')
+                                      .annotate(balloons_month=Sum('amount_of_balloons'), rfid_month=Sum('amount_of_rfid'))
+                                      )
+
+            # Баллонов за текущий день
+            balloons_today_stats = (BalloonAmount.objects
+                                    .filter(change_date=today)
+                                    .values('reader_id')
+                                    .annotate(balloons_today=Sum('amount_of_balloons'), rfid_today=Sum('amount_of_rfid')))
+
+            # Партий за текущий месяц
+            loading_batches_last_month = (BalloonsLoadingBatch.objects
+                                          .filter(begin_date__gte=first_day_of_month)
+                                          .values('reader_number')
+                                          .annotate(month_batches=Count('id'))
+                                          )
+            unloading_batches_last_month = (BalloonsUnloadingBatch.objects
+                                            .filter(begin_date__gte=first_day_of_month)
+                                            .values('reader_number')
+                                            .annotate(month_batches=Count('id'))
+                                            )
+            # Объединяем результаты по партиям за последний месяц
+            batches_last_month = {}
+            for batch in loading_batches_last_month:
+                reader_number = batch['reader_number']
+                batches_last_month[reader_number] = batches_last_month.get(reader_number, 0) + batch['month_batches']
+
+            for batch in unloading_batches_last_month:
+                reader_number = batch['reader_number']
+                batches_last_month[reader_number] = batches_last_month.get(reader_number, 0) + batch['month_batches']
+
+            # Партий за текущий день
+            loading_batches_last_day = (BalloonsLoadingBatch.objects
+                                        .filter(begin_date=today)
+                                        .values('reader_number')
+                                        .annotate(day_batches=Count('id'))
+                                        )
+            unloading_batches_last_day = (BalloonsUnloadingBatch.objects
+                                          .filter(begin_date=today)
+                                          .values('reader_number')
+                                          .annotate(day_batches=Count('id'))
+                                          )
+            # Объединяем результаты по партиям за последний день
+            batches_last_day = {}
+            for batch in loading_batches_last_day:
+                reader_number = batch['reader_number']
+                batches_last_day[reader_number] = batches_last_day.get(reader_number, 0) + batch['day_batches']
+
+            for batch in unloading_batches_last_day:
+                reader_number = batch['reader_number']
+                batches_last_day[reader_number] = batches_last_day.get(reader_number, 0) + batch['day_batches']
+
+            # Преобразуем данные по баллонам за сегодня в словарь для быстрого доступа
+            today_dict = {stat['reader_id']: stat for stat in balloons_today_stats}
+
+            # Объединяем данные
+            response = []
+            for stat in balloons_monthly_stats:
+                reader_id = stat['reader_id']
+                balloons_today = today_dict.get(reader_id, {}).get('balloons_today', 0)
+                rfid_today = today_dict.get(reader_id, {}).get('rfid_today', 0)
+                truck_month = batches_last_month.get(reader_id, 0)
+                truck_today = batches_last_day.get(reader_id, 0)
+
+                # Создаем новый словарь с данными
+                response.append({
+                    'reader_id': reader_id,
+                    'balloons_month': stat['balloons_month'],
+                    'rfid_month': stat['rfid_month'],
+                    'balloons_today': balloons_today,
+                    'rfid_today': rfid_today,
+                    'truck_month': truck_month,
+                    'truck_today': truck_today
+                })
+
+            data = response
+        cache.set(cache_key, data, cache_time)
+        return JsonResponse(data, safe=False)
+
     def create(self, request):
         nfc_tag = request.data.get('nfc_tag', None)
         balloons = Balloon.objects.filter(nfc_tag=nfc_tag).exists()
@@ -285,6 +387,18 @@ class BalloonViewSet(viewsets.ViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@receiver(post_save, sender=Balloon)
+@receiver(post_save, sender=BalloonAmount)
+@receiver(post_save, sender=BalloonsLoadingBatch)
+@receiver(post_save, sender=BalloonsUnloadingBatch)
+@receiver(post_delete, sender=Balloon)
+@receiver(post_delete, sender=BalloonAmount)
+@receiver(post_delete, sender=BalloonsLoadingBatch)
+@receiver(post_delete, sender=BalloonsUnloadingBatch)
+def clear_cache(sender, **kwargs):
+    cache.delete('get_balloon_statistic')
 
 
 @api_view(['GET'])
@@ -348,12 +462,12 @@ class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='add-balloon')
     def add_balloon(self, request, pk=None):
-        balloon_id = request.data.get('balloon_id', None)
+        nfc = request.data.get('nfc', None)
         batch = get_object_or_404(BalloonsLoadingBatch, id=pk)
 
-        if balloon_id:
-            balloon = get_object_or_404(Balloon, id=balloon_id)
-            if batch.balloon_list.filter(id=balloon_id).exists():
+        if nfc:
+            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
+            if batch.balloon_list.filter(nfc_tag=nfc).exists():
                 return Response(status=status.HTTP_409_CONFLICT)
             else:
                 batch.balloon_list.add(balloon)
@@ -365,12 +479,12 @@ class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='remove-balloon')
     def remove_balloon(self, request, pk=None):
-        balloon_id = request.data.get('balloon_id', None)
+        nfc = request.data.get('nfc', None)
         batch = get_object_or_404(BalloonsLoadingBatch, id=pk)
 
-        if balloon_id:
-            balloon = get_object_or_404(Balloon, id=balloon_id)
-            if batch.balloon_list.filter(id=balloon_id).exists():
+        if nfc:
+            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
+            if batch.balloon_list.filter(nfc_tag=nfc).exists():
                 batch.balloon_list.remove(balloon)
                 if batch.amount_of_rfid:
                     batch.amount_of_rfid -= 1
@@ -430,12 +544,12 @@ class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='add-balloon')
     def add_balloon(self, request, pk=None):
-        balloon_id = request.data.get('balloon_id', None)
+        nfc = request.data.get('nfc', None)
         batch = get_object_or_404(BalloonsUnloadingBatch, id=pk)
 
-        if balloon_id:
-            balloon = get_object_or_404(Balloon, id=balloon_id)
-            if batch.balloon_list.filter(id=balloon_id).exists():
+        if nfc:
+            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
+            if batch.balloon_list.filter(nfc_tag=nfc).exists():
                 return Response(status=status.HTTP_409_CONFLICT)
             else:
                 batch.balloon_list.add(balloon)
@@ -447,12 +561,12 @@ class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='remove-balloon')
     def remove_balloon(self, request, pk=None):
-        balloon_id = request.data.get('balloon_id', None)
+        nfc = request.data.get('nfc', None)
         batch = get_object_or_404(BalloonsUnloadingBatch, id=pk)
 
-        if balloon_id:
-            balloon = get_object_or_404(Balloon, id=balloon_id)
-            if batch.balloon_list.filter(id=balloon_id).exists():
+        if nfc:
+            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
+            if batch.balloon_list.filter(nfc_tag=nfc).exists():
                 batch.balloon_list.remove(balloon)
                 if batch.amount_of_rfid:
                     batch.amount_of_rfid -= 1
@@ -508,3 +622,28 @@ class BalloonAmountViewSet(viewsets.ViewSet):
             instance.save()
 
         return Response(status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_active_balloon_batch(request):
+    today = date.today()
+    # Активные партии на сегодня
+    loading_batches = (BalloonsLoadingBatch.objects
+                       .filter(begin_date=today, is_active=True))
+    unloading_batches = (BalloonsUnloadingBatch.objects
+                         .filter(begin_date=today, is_active=True))
+
+    response = []
+    for batch in loading_batches:
+        response.append({
+            'reader_id': batch.reader_number,
+            'truck_registration_number': batch.truck.registration_number,
+            'trailer_registration_number': batch.trailer.registration_number
+        })
+    for batch in unloading_batches:
+        response.append({
+            'reader_id': batch.reader_number,
+            'truck_registration_number': batch.truck.registration_number,
+            'trailer_registration_number': batch.trailer.registration_number
+        })
+    return JsonResponse(response, safe=False)

@@ -1,8 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import balloons, transport
-from rest_framework_simplejwt.views import (TokenObtainPairView, TokenRefreshView)
-
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 app_name = 'filling_station'
 
@@ -27,8 +26,7 @@ urlpatterns = [
     path('balloon-status-options', balloons.get_balloon_status_options),
     path('loading-balloon-reader-list', balloons.get_loading_balloon_reader_list),
     path('unloading-balloon-reader-list', balloons.get_unloading_balloon_reader_list),
-
-    # path('carousel-update', balloons.update_from_carousel),
+    path('get-active-balloon-batch', balloons.get_active_balloon_batch),
 
     path('trucks', transport.TruckView.as_view()),
     path('trailers', transport.TrailerView.as_view()),
