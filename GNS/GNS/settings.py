@@ -190,6 +190,10 @@ LOGGING = {
             'format': '{asctime} - {levelname} - {module}:{lineno} - {message}',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'with_msecs': {
+            'format': '%(asctime)s.%(msecs)03d - %(levelname)s - %(module)s:%(lineno)d - %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
     },
     'handlers': {
         'filling_station_file': {
@@ -208,7 +212,7 @@ LOGGING = {
             'filename': os.path.join(LOGS_DIR, 'carousel.log'),
             'when': 'midnight',
             'backupCount': 30,
-            'formatter': 'verbose',
+            'formatter': 'with_msecs',
             'encoding': 'utf-8',
             'delay': True,
         },

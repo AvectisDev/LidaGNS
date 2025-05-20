@@ -45,10 +45,10 @@ def get_and_remove_last_balloon():
                 redis_client.set(CACHE_KEY, pickle.dumps(balloons))
                 return last_item
             else:
-                logger.debug("Кэш. Данные не являются списком или список пуст")
+                logger.info("Кэш. Данные не являются списком или список пуст")
                 return None
         except Exception as error:
-            logger.debug(f"Кэш. Ошибка при десериализации данных: {error}")
+            logger.error(f"Кэш. Ошибка при десериализации данных: {error}")
             return None
     return None
 
@@ -117,15 +117,18 @@ def check_settings(post_number: int):
     post_settings = db.fetch_carousel_settings()
 
     if post_settings:
+        logger.debug(f'Настройки поста наполнения {post_settings}')
         if post_settings.get('read_only'):
             return transmit_command, weight_correction_value
 
         transmit_command = True
+        logger.debug(f'Требуется отправка веса на пост {post_settings}')
         if post_settings.get('use_weight_management'):
             if post_settings.get('use_common_correction'):
                 weight_correction_value = post_settings.get('weight_correction_value')
             else:
                 weight_correction_value = post_settings.get(f'post_{post_number}_correction')
+        logger.debug(f'Требуется отправка веса на пост. weight_correction_value = {post_settings}')
 
     return transmit_command, weight_correction_value
 
@@ -136,11 +139,10 @@ def check_balloon_size(weight: int) -> int:
     :param weight: Вес баллона перед наполнением
     :return: int: Объём баллона
     """
-    balloon_size = 50
-    # if weight <= 12000:
-    #     balloon_size = 27
-    # elif 14000 < weight < 25000:
-    #     balloon_size = 50
+    if weight <= 16000:
+        balloon_size = 27
+    else:
+        balloon_size = 50
 
     return balloon_size
 
@@ -162,7 +164,6 @@ def request_caching(request_type: str, post_number: int, weight: int) -> bool:
         return request_processing_required
 
     redis_client.set(cache_key, "1", cache_time)
-    logger.debug(f"Запрос от поста сохранен в Redis по ключу {cache_key}")
     return request_processing_required
 
 
@@ -190,18 +191,11 @@ def request_processing(request_type: str, post_number: int, weight: int) -> tupl
             logger.debug("Пост не прошел проверку очередности")
             return response_required, full_weight, {'error': 'post_order_failed'}
 
-        # Временно исключаем обработку баллонов по весу - есть пересечение веса пустых баллонов
-        # if process_data_to_server.get('size') == 50:
-        #     balloon_from_cache = get_and_remove_last_balloon()
-        #     logger.debug(f"Данные кеша с 8 считывателя - {balloon_from_cache}.")
-        # else:
-        #     balloon_from_cache = None
-
-        # Сейчас сразу забираем данные по баллонам из кэша - если метка считалась, значит баллон 50л
+        # Забираем данные по баллону из кэша
         balloon_from_cache = get_and_remove_last_balloon()
 
         if not balloon_from_cache:
-            logger.debug("Нет данных в кеше")
+            logger.debug("Нет данных по баллону в кеше")
             process_data_to_server.update({
                 'is_empty': True,
                 'empty_weight': weight / 1000
@@ -213,7 +207,8 @@ def request_processing(request_type: str, post_number: int, weight: int) -> tupl
             response_required, weight_correction = check_settings(post_number)
             if response_required:
                 full_weight = int((brutto + weight_correction) * 1000)
-                logger.debug(f"Полный вес баллона по паспорту: {brutto} кг. Коррекция веса: {weight_correction} кг")
+                logger.debug(f"Требуется отправка веса на пост. Полный вес баллона по паспорту: {brutto} кг. "
+                             f"Коррекция веса: {weight_correction} кг")
 
         process_data_to_server.update({
             'is_empty': True,
@@ -258,7 +253,7 @@ def serial_exchange():
                 crc = int.from_bytes(data[6:8], byteorder='little')
 
                 request_type_in_str = str(hex(request_type))
-                logger.debug(f"Получен запрос от поста. Тип запроса: {request_type_in_str}. "
+                logger.info(f"Получен запрос от поста. Тип запроса: {request_type_in_str}. "
                              f"Номер поста: {post_number}. Масса баллона: {weight_combined}")
 
                 # Обработка запроса с поста
@@ -302,7 +297,7 @@ def serial_exchange():
                     # Отправляем данные на сервер для статистики
                     if process_data_to_server and isinstance(process_data_to_server, dict):
                         api.put_carousel_data(process_data_to_server, session)
-                        logger.debug(f"Данные отправлены на сервер")
+                        logger.info(f"Данные отправлены на сервер")
 
     except serial.SerialException as error:
         logger.error(f"Ошибка: {error}. Проверьте правильность указанного порта.")

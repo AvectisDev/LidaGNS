@@ -232,6 +232,9 @@ class BalloonViewSet(viewsets.ViewSet):
             )
             # Сохраняем баллон в кэш на каруселях наполнения №1 и 2)
             if reader_number in [7, 8]:
+                timeout_hours = 1
+                timeout_seconds = timeout_hours * 3600
+
                 cache_key = f'reader_{reader_number}_balloon_stack'
                 stack = cache.get(cache_key, [])
 
@@ -248,7 +251,7 @@ class BalloonViewSet(viewsets.ViewSet):
                 logger.debug(f'Стек считывателя {reader_number} = {stack}')
 
                 # Сохраняем обновленный стек в кэш
-                cache.set(cache_key, stack, timeout=None)
+                cache.set(cache_key, stack, timeout=timeout_seconds)
 
         serializer = BalloonSerializer(balloon)
         return Response(serializer.data)
@@ -281,15 +284,6 @@ class BalloonViewSet(viewsets.ViewSet):
         if not data:
             today = date.today()
             first_day_of_month = today.replace(day=1)
-
-            # Баллонов на станции
-            filled_balloons_on_station = (Balloon.objects
-                                          .filter(status='Регистрация полного баллона на складе')
-                                          .aggregate(total=Count('nfc_tag')))
-            empty_balloons_on_station = (Balloon.objects
-                                         .filter(status__in=['Регистрация пустого баллона на складе (рампа)',
-                                                             'Регистрация пустого баллона на складе (цех)'])
-                                         .aggregate(total=Count('nfc_tag')))
 
             # Баллонов за текущий месяц
             balloons_monthly_stats = (BalloonAmount.objects
@@ -370,10 +364,6 @@ class BalloonViewSet(viewsets.ViewSet):
                     'truck_today': truck_today
                 })
 
-            response.append({
-                'filled_balloons_on_station': filled_balloons_on_station.get('total', 0),
-                'empty_balloons_on_station': empty_balloons_on_station.get('total', 0)
-            })
             data = response
         cache.set(cache_key, data, cache_time)
         return JsonResponse(data, safe=False)

@@ -29,9 +29,9 @@ def put_carousel_data(data: dict, session: requests.Session):
     :return: возвращает словарь со статусом ответа и весом баллона
     """
     try:
-        logger.debug(f"balloon_api данные поста отправлены - {data}")
+        logger.debug(f"api - данные c поста отправлены - {data}")
         response = session.post(f"{settings.DJANGO_API_HOST}/carousel/balloon-update/", json=data, timeout=2)
-        logger.debug(f"balloon_api данные поста получены - {response}")
+        logger.debug(f"api - данные от сервера получены - {response}")
         response.raise_for_status()
         if response.content:
             return response.json()
