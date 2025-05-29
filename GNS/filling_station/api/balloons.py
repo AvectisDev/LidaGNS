@@ -232,8 +232,8 @@ class BalloonViewSet(viewsets.ViewSet):
             )
             # Сохраняем баллон в кэш на каруселях наполнения №1 и 2)
             if reader_number in [7, 8]:
-                timeout_hours = 1
-                timeout_seconds = timeout_hours * 3600
+                timeout_minutes = 10
+                timeout_seconds = timeout_minutes * 60
 
                 cache_key = f'reader_{reader_number}_balloon_stack'
                 stack = cache.get(cache_key, [])

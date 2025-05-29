@@ -33,8 +33,9 @@ BAUD_RATE = 9600
 
 def get_and_remove_last_balloon():
     """
-    Извлекает последний элемент из стека в Redis и удаляет его. Работа со стеком по принципу FIFO
+    Извлекает последний элемент из стека баллонов в Redis и удаляет его. Работа со стеком по принципу FIFO
     """
+    cache_timeout = 600
     last_balloon = redis_client.get(CACHE_KEY)
 
     if last_balloon:
@@ -42,7 +43,7 @@ def get_and_remove_last_balloon():
             balloons = pickle.loads(last_balloon)
             if isinstance(balloons, list) and balloons:
                 last_item = balloons.pop()
-                redis_client.set(CACHE_KEY, pickle.dumps(balloons))
+                redis_client.set(CACHE_KEY, pickle.dumps(balloons), ex=cache_timeout)
                 return last_item
             else:
                 logger.info("Кэш. Данные не являются списком или список пуст")

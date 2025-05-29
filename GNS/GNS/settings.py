@@ -179,7 +179,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 CELERY_HIJACK_ROOT_LOGGER = False
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_RESULT_EXPIRES = 86400  # 24 часа
+CELERY_RESULT_EXPIRES = 10800  # 3 часа
 
 LOGGING = {
     'version': 1,
@@ -227,7 +227,7 @@ LOGGING = {
             'delay': True,
         },
         'celery_file': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.handlers.TimedRotatingFileHandler',
             'filename': os.path.join(LOGS_DIR, 'celery.log'),
             'when': 'midnight',
@@ -255,7 +255,7 @@ LOGGING = {
         },
         'celery': {
             'handlers': ['celery_file'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
     },
