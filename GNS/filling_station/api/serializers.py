@@ -24,8 +24,8 @@ class BalloonSerializer(serializers.ModelSerializer):
             'status',
             'manufacturer',
             'wall_thickness',
-            'filling_status',
-            'update_passport_required'
+            #'filling_status',
+            #'update_passport_required'
         ]
 
 
