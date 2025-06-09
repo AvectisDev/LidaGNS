@@ -380,7 +380,7 @@ class BalloonViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_409_CONFLICT)
 
     def partial_update(self, request, pk=None):
-        balloon = get_object_or_404(Balloon, id=pk)
+        balloon = get_object_or_404(Balloon, nfc_tag=pk)
 
         serializer = BalloonSerializer(balloon, data=request.data, partial=True)
         if serializer.is_valid():

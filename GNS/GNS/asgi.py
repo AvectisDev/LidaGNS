@@ -36,12 +36,12 @@ def handle_exit(signum, frame):
     stop_processes()
     sys.exit(0)
 
-# Устанавливаем обработчики сигналов для graceful shutdown
-signal.signal(signal.SIGINT, handle_exit)
-signal.signal(signal.SIGTERM, handle_exit)
-
-# Запускаем процессы при инициализации ASGI
-start_processes()
+# # Устанавливаем обработчики сигналов для graceful shutdown
+# signal.signal(signal.SIGINT, handle_exit)
+# signal.signal(signal.SIGTERM, handle_exit)
+#
+# # Запускаем процессы при инициализации ASGI
+# start_processes()
 
 # Стандартная настройка Django ASGI
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'GNS.settings')
