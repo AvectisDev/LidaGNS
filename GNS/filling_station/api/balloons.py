@@ -1,6 +1,5 @@
 import logging
 import requests
-from ..models import Balloon, Reader, BalloonAmount, BalloonsLoadingBatch, BalloonsUnloadingBatch
 from django.http import JsonResponse
 from django.db.models import Sum, Count
 from django.shortcuts import get_object_or_404
@@ -8,12 +7,21 @@ from django.core.cache import cache
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.conf import settings
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, viewsets, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from filling_station.tasks import send_to_opc
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiParameter,
+    OpenApiExample,
+    OpenApiTypes,
+    extend_schema_view,
+    inline_serializer
+)
 from datetime import datetime, date
+from filling_station.tasks import send_to_opc
+from ..models import Balloon, Reader, BalloonAmount, BalloonsLoadingBatch, BalloonsUnloadingBatch
 from .serializers import (
     BalloonSerializer,
     BalloonAmountSerializer,
@@ -76,13 +84,10 @@ class BalloonViewSet(viewsets.ViewSet):
         """
         Метод для получения данных о баллоне по NFC-метке из Мириады.
         """
-        # miriada server address
-        BASE_URL = 'https://publicapi-vitebsk.cloud.gas.by'
-        # метод получения основных данных баллона
-        url = f'{BASE_URL}/getballoonbynfctag?nfctag={nfc_tag}&realm=brestoblgas'
+        url = f'{settings.MIRIADA_API_URL}/getballoonbynfctag?nfctag={nfc_tag}&realm=grodnooblgas'
 
         try:
-            response = requests.get(url, timeout=2)
+            response = requests.get(url, timeout=3)
             response.raise_for_status()
             result = response.json()
 
@@ -97,13 +102,15 @@ class BalloonViewSet(viewsets.ViewSet):
             self.logger.error(f'Ошибка в методе получения паспорта баллона из Мириады: {error}')
             return None
 
-    def send_status_to_miriada(self, send_type: str, nfc_tag: str, send_data: dict = None):
+    def send_status_to_miriada(self, reader: int, nfc_tag: str):
         """
         Метод для отправки статусов баллонов по NFC-метке в Мириаду.
         Поддерживается 3 основных типа отправки (send_type):
         filling - Наполнение баллона
         registering_in_warehouse - Регистрация баллона на склад
         loading_into_truck - Погрузка баллона в машину
+        number_auto - номер машины в формате "AM 7881-2". Номер должен быть в ПК «Автопарк»
+        type_car - тип машины: 0-кассета, 1 — трал
         """
         send_urls = {
             'filling': f'{settings.MIRIADA_API_POST_URL}/fillingballoon',
@@ -117,26 +124,40 @@ class BalloonViewSet(viewsets.ViewSet):
         }
 
         payload = {
-            "nfctag": nfc_tag,
-            "realm": "grodnooblgas"
+            'nfctag': nfc_tag,
+            'realm': 'grodnooblgas'
         }
 
-        if send_data is not None:
-            fulness = send_data.get('fulness')  # 1-полный, 0 — пустой
-            if fulness:
-                payload.update({"fulness": fulness})
+        # Инициализация переменных
+        send_type = fullness = number_auto = type_car = None
 
-            number_auto = send_data.get('number_auto')  # "AM 7881-2" номер машины.(Номер должен быть добавлен в  ПК «Автопарк»
-            type_car = send_data.get('type_car')    # 0-кассета, 1 — трал
-            if number_auto and type_car:
-                payload.update({
-                    "fulness": fulness,
-                    "number_auto": number_auto,
-                    "type_car": type_car
-                })
+        if reader in [7, 8]:
+            send_type = 'filling'
+        elif reader in [3, 4]:
+            send_type = 'registering_in_warehouse'
+            fullness = 0
+        elif reader == 5:
+            send_type = 'registering_in_warehouse'
+            fullness = 1
+        elif reader in [1, 2]:
+            send_type = 'loading_into_truck'
+            fullness = 1
+            batch = BalloonsUnloadingBatch.objects.last()
+            number_auto = batch.truck.registration_number
+            formatted_number_auto = f"{number_auto[:2]} {number_auto[2:6]}-{number_auto[6]}"
+            type_car = 0 if batch.truck.type.type == 'Клетевоз' else 1
+
+        if fullness is not None:
+            payload.update({"fulness": fullness})
+
+        if number_auto is not None and type_car is not None:
+            payload.update({
+                # "number_auto": formatted_number_auto,
+                "number_auto": "AM 9871-4",
+                "type_car": type_car
+            })
 
         try:
-            # Создаем запрос в Мириаду
             session = requests.Session()
             req = requests.Request(
                 'POST',
@@ -153,17 +174,17 @@ class BalloonViewSet(viewsets.ViewSet):
                 f"Headers: {prepared.headers}\n"
                 f"Body: {prepared.body}"
             )
-            self.logger.debug(f'Тело запроса: {payload}')
 
             response = session.send(prepared, timeout=2)
-            response.raise_for_status()
             if response.status_code == 200:
                 self.logger.info(f"Статус по {send_type} успешно отправлен")
             else:
-                self.logger.warning(f"Ошибка по {send_type}! Код: {response.status_code}, Описание: {response.reason}")
+                self.logger.error(
+                    f"Ошибка по {send_type}! Status: {response.status_code} {response.reason}, Ответ: {response.json()}")
 
         except Exception as error:
-            self.logger.error(f'Ошибка в методе отправки статуса баллона в Мириаду: {error}')
+            self.logger.error(
+                f'Ошибка по {send_type} в методе отправки статуса баллона в Мириаду: ошибка: {error}, URL: {prepared.url}')
 
     @action(detail=False, methods=['post'], url_path='update-by-reader')
     def update_by_reader(self, request):
@@ -186,18 +207,12 @@ class BalloonViewSet(viewsets.ViewSet):
                 'status': balloon_status
             }
         )
+        # Отправка статусов в Мириаду
         reader_number = request.data.get('reader_number')
         if reader_number is None:
             self.logger.error("Номер ридера отсутствует в теле запроса")
-        elif reader_number == 8:
-            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='filling')
-        elif reader_number in [3, 4]:
-            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='registering_in_warehouse', send_data={'fulness': 0})
-        elif reader_number == 5:
-            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='registering_in_warehouse', send_data={'fulness': 1})
-        elif reader_number in [1, 2]:
-            self.send_status_to_miriada(nfc_tag=nfc_tag, send_type='loading_into_truck',
-                                        send_data={'fulness': 1, "type_car": 1, "number_auto": ' ', })
+        elif (1 <= reader_number <= 5) or reader_number == 8:
+            self.send_status_to_miriada(reader=reader_number, nfc_tag=nfc_tag)
 
         # Если требуется обновление паспорта или идёт приёмка новых баллонов - выполняем запрос в Мириаду
         if balloon.update_passport_required in (True, None) or reader_number in [3, 4]:
@@ -416,7 +431,236 @@ def get_unloading_balloon_reader_list(request):
     return Response(BALLOONS_UNLOADING_READER_LIST)
 
 
+# Схемы для Swagger
+BalloonOperationResponse = inline_serializer(
+    name='BalloonOperationResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'balloon_id': serializers.IntegerField(allow_null=True),
+        'new_count': serializers.IntegerField(),
+        'error': serializers.CharField()
+    }
+)
+
+@extend_schema_view(
+    is_active=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Получить активные партии',
+        description='Получение списка всех активных партий приёмки баллонов',
+        responses={
+            200: ActiveLoadingBatchSerializer(many=True),
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример ответа',
+                value=[{
+                    "id": 1,
+                    "begin_date": "2023-05-15",
+                    "begin_time": "08:30:00",
+                    "truck": 1,
+                    "trailer": 1,
+                    "amount_of_rfid": 15,
+                    "is_active": True
+                }],
+                response_only=True
+            )
+        ]
+    ),
+    last_active=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Получить последнюю активную партию',
+        description='Получение данных последней созданной активной партии приёмки',
+        responses={
+            200: BalloonsLoadingBatchSerializer,
+            404: OpenApiTypes.OBJECT
+        }
+    ),
+    rfid_amount=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Количество баллонов по RFID',
+        description='Получение количества баллонов в партии, зарегистрированных по RFID',
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии приёмки'
+            )
+        ],
+        responses={
+            200: BalloonAmountLoadingSerializer,
+            404: OpenApiTypes.OBJECT
+        }
+    ),
+    create=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Создать новую партию',
+        description='Создание новой партии приёмки баллонов',
+        request=BalloonsLoadingBatchSerializer,
+        responses={
+            201: BalloonsLoadingBatchSerializer,
+            400: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример запроса',
+                value={
+                    "truck": 1,
+                    "trailer": 1,
+                    "reader_number": 2,
+                    "ttn": "AB123456",
+                    "amount_of_ttn": 50,
+                    "is_active": True
+                },
+                request_only=True
+            )
+        ]
+    ),
+    partial_update=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Обновить партию',
+        description='Частичное обновление данных партии приёмки',
+        request=BalloonsLoadingBatchSerializer,
+        responses={
+            200: BalloonsLoadingBatchSerializer,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример запроса на завершение партии',
+                value={
+                    "is_active": False,
+                    "amount_of_5_liters": 10,
+                    "amount_of_12_liters": 15,
+                    "amount_of_27_liters": 20,
+                    "amount_of_50_liters": 5,
+                    "gas_amount": 1500.5
+                },
+                request_only=True
+            )
+        ]
+    ),
+    add_balloon=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Добавить баллон в партию',
+        description='Добавление баллона в партию приёмки по NFC метке',
+        request=inline_serializer(
+            name='AddBalloonRequest',
+            fields={
+                'nfc': serializers.CharField()
+            }
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии приёмки'
+            )
+        ],
+        responses={
+            200: BalloonOperationResponse,
+            400: BalloonOperationResponse,
+            404: BalloonOperationResponse,
+            409: BalloonOperationResponse
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное добавление',
+                value={
+                    'success': True,
+                    'balloon_id': 123,
+                    'new_count': 15,
+                    'error': 'ok'
+                },
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Баллон уже в партии',
+                value={
+                    'success': False,
+                    'balloon_id': 123,
+                    'new_count': 14,
+                    'error': 'Баллон уже в партии'
+                },
+                response_only=True,
+                status_codes=['409']
+            ),
+            OpenApiExample(
+                'Баллон не найден',
+                value={
+                    'success': False,
+                    'balloon_id': None,
+                    'new_count': 14,
+                    'error': 'Баллон не найден'
+                },
+                response_only=True,
+                status_codes=['404']
+            )
+        ]
+    ),
+    remove_balloon=extend_schema(
+        tags=['Партии приёмки баллонов'],
+        summary='Удалить баллон из партии',
+        description='Удаление баллона из партии приёмки по NFC метке',
+        request=inline_serializer(
+            name='RemoveBalloonRequest',
+            fields={
+                'nfc': serializers.CharField()
+            }
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии приёмки'
+            )
+        ],
+        responses={
+            200: BalloonOperationResponse,
+            400: BalloonOperationResponse,
+            404: BalloonOperationResponse
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное удаление',
+                value={
+                    'success': True,
+                    'balloon_id': 123,
+                    'new_count': 14,
+                    'error': 'ok'
+                },
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Баллон не найден в партии',
+                value={
+                    'success': False,
+                    'balloon_id': 123,
+                    'new_count': 15,
+                    'error': 'Баллон не найден в партии'
+                },
+                response_only=True,
+                status_codes=['404']
+            )
+        ]
+    )
+)
 class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
+    """
+    API для управления партиями приёмки баллонов
+
+    Позволяет:
+    - Создавать и обновлять партии приёмки
+    - Управлять активными партиями
+    - Добавлять/удалять баллоны по NFC
+    - Получать статистику по партиям
+    """
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'], url_path='active')
@@ -462,42 +706,250 @@ class BalloonsLoadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='add-balloon')
     def add_balloon(self, request, pk=None):
-        nfc = request.data.get('nfc', None)
+        nfc = request.data.get('nfc')
+        if not nfc:
+            return Response(
+                {"error": "Параметр 'nfc' обязателен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         batch = get_object_or_404(BalloonsLoadingBatch, id=pk)
+        result = batch.add_balloon(nfc)
 
-        if nfc:
-            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
-            if batch.balloon_list.filter(nfc_tag=nfc).exists():
-                return Response(status=status.HTTP_409_CONFLICT)
-            else:
-                batch.balloon_list.add(balloon)
-                batch.amount_of_rfid = (batch.amount_of_rfid or 0) + 1
-                batch.save()
-                return Response(status=status.HTTP_200_OK)
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        error_status = {
+            'Баллон уже в партии': status.HTTP_409_CONFLICT,
+            'Баллон не найден': status.HTTP_404_NOT_FOUND
+        }.get(result['error'], status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=error_status)
 
     @action(detail=True, methods=['patch'], url_path='remove-balloon')
     def remove_balloon(self, request, pk=None):
-        nfc = request.data.get('nfc', None)
+        nfc = request.data.get('nfc')
+        if not nfc:
+            return Response(
+                {"error": "Параметр 'nfc' обязателен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         batch = get_object_or_404(BalloonsLoadingBatch, id=pk)
+        result = batch.remove_balloon(nfc)
 
-        if nfc:
-            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
-            if batch.balloon_list.filter(nfc_tag=nfc).exists():
-                batch.balloon_list.remove(balloon)
-                if batch.amount_of_rfid:
-                    batch.amount_of_rfid -= 1
-                else:
-                    batch.amount_of_rfid = 0
-                batch.save()
-                return Response(status=status.HTTP_200_OK)
-            else:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        error_status = {
+            'Баллон не найден в партии': status.HTTP_404_NOT_FOUND,
+            'Баллон не найден': status.HTTP_404_NOT_FOUND
+        }.get(result['error'], status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=error_status)
 
 
+@extend_schema_view(
+    is_active=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Активные партии отгрузки',
+        description='Получение списка активных партий отгрузки баллонов',
+        responses={
+            200: ActiveUnloadingBatchSerializer(many=True),
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример ответа',
+                value=[{
+                    "id": 1,
+                    "begin_date": "2023-05-15",
+                    "begin_time": "09:30:00",
+                    "truck": {"id": 1, "registration_number": "А123БВ777"},
+                    "trailer": {"id": 1, "registration_number": "ПТ987ХВ"},
+                    "amount_of_rfid": 12,
+                    "is_active": True,
+                    "ttn": "ТТН-789012"
+                }],
+                response_only=True
+            )
+        ]
+    ),
+    last_active=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Последняя активная партия',
+        description='Получение данных последней активной партии отгрузки',
+        responses={
+            200: BalloonsUnloadingBatchSerializer,
+            404: OpenApiTypes.OBJECT
+        }
+    ),
+    rfid_amount=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Количество RFID-баллонов',
+        description='Получение количества баллонов в партии, зарегистрированных по RFID',
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии отгрузки'
+            )
+        ],
+        responses={
+            200: BalloonAmountUnloadingSerializer,
+            404: OpenApiTypes.OBJECT
+        }
+    ),
+    create=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Создать партию отгрузки',
+        description='Создание новой партии отгрузки баллонов',
+        request=BalloonsUnloadingBatchSerializer,
+        responses={
+            201: BalloonsUnloadingBatchSerializer,
+            400: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример запроса',
+                value={
+                    "truck": 1,
+                    "trailer": 1,
+                    "reader_number": 3,
+                    "ttn": "ТТН-789012",
+                    "amount_of_ttn": 25,
+                    "is_active": True
+                },
+                request_only=True
+            )
+        ]
+    ),
+    partial_update=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Обновить партию отгрузки',
+        description='Обновление данных партии отгрузки баллонов',
+        request=BalloonsUnloadingBatchSerializer,
+        responses={
+            200: BalloonsUnloadingBatchSerializer,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Пример запроса',
+                value={
+                    "is_active": False,
+                    "amount_of_5_liters": 8,
+                    "amount_of_12_liters": 10,
+                    "amount_of_27_liters": 5,
+                    "amount_of_50_liters": 2,
+                    "gas_amount": 1200.75,
+                    "end_date": "2023-05-15",
+                    "end_time": "17:45:00"
+                },
+                request_only=True
+            )
+        ]
+    ),
+    add_balloon=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Добавить баллон в отгрузку',
+        description='Добавление баллона в партию отгрузки по NFC метке',
+        request=inline_serializer(
+            name='AddBalloonToUnloadingRequest',
+            fields={
+                'nfc': serializers.CharField()
+            }
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии отгрузки'
+            )
+        ],
+        responses={
+            200: BalloonOperationResponse,
+            400: BalloonOperationResponse,
+            404: BalloonOperationResponse,
+            409: BalloonOperationResponse
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное добавление',
+                value={
+                    'success': True,
+                    'balloon_id': 45,
+                    'new_count': 13,
+                    'error': 'ok'
+                },
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Ошибка: баллон уже в партии',
+                value={
+                    'success': False,
+                    'balloon_id': 45,
+                    'new_count': 12,
+                    'error': 'Баллон уже в партии'
+                },
+                response_only=True,
+                status_codes=['409']
+            )
+        ]
+    ),
+    remove_balloon=extend_schema(
+        tags=['Партии отгрузки баллонов'],
+        summary='Удалить баллон из отгрузки',
+        description='Удаление баллона из партии отгрузки по NFC метке',
+        request=inline_serializer(
+            name='RemoveBalloonFromUnloadingRequest',
+            fields={
+                'nfc': serializers.CharField()
+            }
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='ID партии отгрузки'
+            )
+        ],
+        responses={
+            200: BalloonOperationResponse,
+            400: BalloonOperationResponse,
+            404: BalloonOperationResponse
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное удаление',
+                value={
+                    'success': True,
+                    'balloon_id': 45,
+                    'new_count': 11,
+                    'error': 'ok'
+                },
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Ошибка: баллон не найден',
+                value={
+                    'success': False,
+                    'balloon_id': None,
+                    'new_count': 12,
+                    'error': 'Баллон не найден в партии'
+                },
+                response_only=True,
+                status_codes=['404']
+            )
+        ]
+    )
+)
 class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -544,40 +996,47 @@ class BalloonsUnloadingBatchViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['patch'], url_path='add-balloon')
     def add_balloon(self, request, pk=None):
-        nfc = request.data.get('nfc', None)
+        nfc = request.data.get('nfc')
+        if not nfc:
+            return Response(
+                {"error": "Параметр 'nfc' обязателен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         batch = get_object_or_404(BalloonsUnloadingBatch, id=pk)
+        result = batch.add_balloon(nfc)
 
-        if nfc:
-            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
-            if batch.balloon_list.filter(nfc_tag=nfc).exists():
-                return Response(status=status.HTTP_409_CONFLICT)
-            else:
-                batch.balloon_list.add(balloon)
-                batch.amount_of_rfid = (batch.amount_of_rfid or 0) + 1
-                batch.save()
-                return Response(status=status.HTTP_200_OK)
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        error_status = {
+            'Баллон уже в партии': status.HTTP_409_CONFLICT,
+            'Баллон не найден': status.HTTP_404_NOT_FOUND
+        }.get(result['error'], status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=error_status)
 
     @action(detail=True, methods=['patch'], url_path='remove-balloon')
     def remove_balloon(self, request, pk=None):
-        nfc = request.data.get('nfc', None)
+        nfc = request.data.get('nfc')
+        if not nfc:
+            return Response(
+                {"error": "Параметр 'nfc' обязателен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         batch = get_object_or_404(BalloonsUnloadingBatch, id=pk)
+        result = batch.remove_balloon(nfc)
 
-        if nfc:
-            balloon = get_object_or_404(Balloon, nfc_tag=nfc)
-            if batch.balloon_list.filter(nfc_tag=nfc).exists():
-                batch.balloon_list.remove(balloon)
-                if batch.amount_of_rfid:
-                    batch.amount_of_rfid -= 1
-                else:
-                    batch.amount_of_rfid = 0
-                batch.save()
-                return Response(status=status.HTTP_200_OK)
-            else:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        error_status = {
+            'Баллон не найден в партии': status.HTTP_404_NOT_FOUND,
+            'Баллон не найден': status.HTTP_404_NOT_FOUND
+        }.get(result['error'], status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=error_status)
 
 
 class BalloonAmountViewSet(viewsets.ViewSet):
@@ -626,12 +1085,12 @@ class BalloonAmountViewSet(viewsets.ViewSet):
 
 @api_view(['GET'])
 def get_active_balloon_batch(request):
+    """
+    Метод получения списков активных партий
+    """
     today = date.today()
-    # Активные партии на сегодня
-    loading_batches = (BalloonsLoadingBatch.objects
-                       .filter(begin_date=today, is_active=True))
-    unloading_batches = (BalloonsUnloadingBatch.objects
-                         .filter(begin_date=today, is_active=True))
+    loading_batches = BalloonsLoadingBatch.objects.filter(begin_date=today, is_active=True)
+    unloading_batches = BalloonsUnloadingBatch.objects.filter(begin_date=today, is_active=True)
 
     response = []
     for batch in loading_batches:

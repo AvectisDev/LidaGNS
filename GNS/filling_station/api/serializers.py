@@ -24,8 +24,8 @@ class BalloonSerializer(serializers.ModelSerializer):
             'status',
             'manufacturer',
             'wall_thickness',
-            #'filling_status',
-            #'update_passport_required'
+            'filling_status',
+            'update_passport_required'
         ]
 
 
@@ -116,9 +116,25 @@ class ActiveLoadingBatchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BalloonsLoadingBatch
-        fields = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                  'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                  'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn', 'amount_of_ttn']
+        fields = [
+            'id',
+            'begin_date',
+            'begin_time',
+            'end_date',
+            'end_time',
+            'truck',
+            'trailer',
+            'reader_number',
+            'amount_of_rfid',
+            'amount_of_5_liters',
+            'amount_of_12_liters',
+            'amount_of_27_liters',
+            'amount_of_50_liters',
+            'gas_amount',
+            'is_active',
+            'ttn',
+            'amount_of_ttn'
+        ]
 
 
 class ActiveUnloadingBatchSerializer(serializers.ModelSerializer):
@@ -126,9 +142,25 @@ class ActiveUnloadingBatchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BalloonsUnloadingBatch
-        fields = ['id', 'begin_date', 'begin_time', 'end_date', 'end_time', 'truck', 'trailer', 'reader_number',
-                  'amount_of_rfid', 'amount_of_5_liters', 'amount_of_12_liters', 'amount_of_27_liters',
-                  'amount_of_50_liters', 'gas_amount', 'is_active', 'ttn', 'amount_of_ttn']
+        fields = [
+            'id',
+            'begin_date',
+            'begin_time',
+            'end_date',
+            'end_time',
+            'truck',
+            'trailer',
+            'reader_number',
+            'amount_of_rfid',
+            'amount_of_5_liters',
+            'amount_of_12_liters',
+            'amount_of_27_liters',
+            'amount_of_50_liters',
+            'gas_amount',
+            'is_active',
+            'ttn',
+            'amount_of_ttn'
+        ]
 
 
 class BalloonAmountLoadingSerializer(serializers.ModelSerializer):

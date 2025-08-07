@@ -115,6 +115,7 @@ async def read_nfc_tag(reader: dict):
 
             try:
                 balloon_passport_status = await balloon_passport_processing(nfc_tag, reader)
+                logger.error(f'main balloon_passport_status: {balloon_passport_status}')
                 
                 # if reader["ip"] == '10.10.2.23':
                 #     logger.debug(f'{reader["ip"]} rfid 3.записываем в бд новое количество rfid баллонов')
@@ -125,7 +126,7 @@ async def read_nfc_tag(reader: dict):
                 # }
                 # await balloon_api.update_balloon_amount('rfid', data_for_amount)
                 await db.write_balloons_amount(reader, 'rfid')  # сохраняем значение в бд
-
+                logger.error(f'запись в базу завершена')
                 # if reader["ip"] == '10.10.2.23':
                 #     logger.debug(f'{reader["ip"]} rfid 4.запись завершена')
 
@@ -137,7 +138,7 @@ async def read_nfc_tag(reader: dict):
                     await data_exchange_with_reader(reader, 'read_complete_with_error')
 
             except Exception as error:
-                print('Ошибка в функции read_nfc_tag', error)
+                logger.error(f'Ошибка в функции read_nfc_tag', error)
 
     else:
         await asyncio.sleep(0.3)

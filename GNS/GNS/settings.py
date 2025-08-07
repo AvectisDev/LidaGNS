@@ -15,9 +15,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = os.environ.get('DEBUG')
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248', '10.0.2.2']
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
 
 # Application definition
-
 INSTALLED_APPS = [
     "daphne",
     'django.contrib.admin',
@@ -31,6 +32,7 @@ INSTALLED_APPS = [
     'mobile.apps.MobileConfig',
     'carousel.apps.CarouselConfig',
     'ttn.apps.TtnConfig',
+    'drf_spectacular',
     'import_export',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -47,6 +49,32 @@ INTERNAL_IPS = [
     '[::1]',
 ]
 
+# Настройки drf-spectacular
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Balloon Management API',
+    'DESCRIPTION': 'API for managing gas balloons, loading/unloading batches and integration with Miriada system',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/v[0-9]',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'AUTHENTICATION_WHITELIST': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+    },
+    'PREPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.preprocess_exclude_path_format',
+    ],
+    'SCHEMA_COERCE_PATH_PK_SUFFIX': True,
+    'TAGS_SORTER': 'alpha',
+    'OPERATIONS_SORTER': 'alpha',
+    'DEFAULT_TAG': 'Другое',
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -57,6 +85,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
@@ -113,7 +142,7 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST'),
         'PORT': os.environ.get('DB_PORT'),
-        'CONN_MAX_AGE': 600,  # Соединение будет жить 10 минут
+        'CONN_MAX_AGE': 600
     }
 }
 
@@ -179,7 +208,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 CELERY_HIJACK_ROOT_LOGGER = False
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_RESULT_EXPIRES = 10800  # 3 часа
+CELERY_RESULT_EXPIRES = 3600  # 1 час
 
 LOGGING = {
     'version': 1,
@@ -199,7 +228,7 @@ LOGGING = {
         'filling_station_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'filling_station.log'),
+            'filename': os.path.join(LOGS_DIR, 'filling_station/filling_station.log'),
             'when': 'midnight',
             'backupCount': 30,
             'formatter': 'verbose',
@@ -209,7 +238,7 @@ LOGGING = {
         'carousel_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'carousel.log'),
+            'filename': os.path.join(LOGS_DIR, 'carousel/carousel.log'),
             'when': 'midnight',
             'backupCount': 30,
             'formatter': 'with_msecs',
@@ -219,7 +248,7 @@ LOGGING = {
         'rfid_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'rfid.log'),
+            'filename': os.path.join(LOGS_DIR, 'rfid/rfid.log'),
             'when': 'midnight',
             'backupCount': 30,
             'formatter': 'verbose',
@@ -229,7 +258,7 @@ LOGGING = {
         'celery_file': {
             'level': 'INFO',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'celery.log'),
+            'filename': os.path.join(LOGS_DIR, 'celery/celery.log'),
             'when': 'midnight',
             'backupCount': 30,
             'formatter': 'verbose',
@@ -264,6 +293,8 @@ LOGGING = {
 DJANGO_API_HOST = 'http://localhost:8000/api'
 OPC_SERVER_URL = 'opc.tcp://192.168.100.54:4840'
 
+# ITGas
+MIRIADA_API_URL = os.environ.get('MIRIADA_API_URL')
 MIRIADA_API_POST_URL = os.environ.get('MIRIADA_API_POST_URL')
 MIRIADA_AUTH_LOGIN = os.environ.get('MIRIADA_AUTH_LOGIN')
 MIRIADA_AUTH_PASSWORD = os.environ.get('MIRIADA_AUTH_PASSWORD')

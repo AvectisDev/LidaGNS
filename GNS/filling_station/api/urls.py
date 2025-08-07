@@ -29,7 +29,6 @@ urlpatterns = [
     path('get-active-balloon-batch', balloons.get_active_balloon_batch),
 
     path('trucks', transport.TruckView.as_view()),
-    path('trailers', transport.TrailerView.as_view()),
 
     path('', include(balloons_loading_router.urls)),
     path('', include(balloons_unloading_router.urls)),

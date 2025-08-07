@@ -37,18 +37,42 @@
                     </a>
                     <div class="collapse" id="readers-collapse">
                         <ul class="nav flex-column ps-3">
-                            <li><a href="/reader/1" class="nav-link">1 - Погрузка полного баллона на трал 1</a></li>
-                            <li><a href="/reader/2" class="nav-link">2 - Погрузка полного баллона на трал 2</a></li>
-                            <li><a href="/reader/3" class="nav-link">3 - Приёмка пустого баллона из трала 1</a></li>
-                            <li><a href="/reader/4" class="nav-link">4 - Приёмка пустого баллона из трала 2</a></li>
-                            <li><a href="/reader/5" class="nav-link">5 - Регистрация полного баллона на складе</a></li>
-                            <li><a href="/reader/6" class="nav-link">6 - Регистрация пустого баллона в цеху</a></li>
-                            <li><a href="/reader/7" class="nav-link">7 - Наполнение баллона сжиженным газом. Карусель №1</a></li>
-                            <li><a href="/reader/8" class="nav-link">8 - Наполнение баллона сжиженным газом. Карусель №2</a></li>
-                            <li><a href="/reader/9" class="nav-link">9 - Вход в наполнительный цех из ремонтного</a></li>
-                            <li><a href="/reader/10" class="nav-link">10 - Выход из наполнительного цеха в ремонтный</a></li>
-                            <li><a href="/reader/11" class="nav-link">11 - Вход в ремонтный цех из наполнительного</a></li>
-                            <li><a href="/reader/12" class="nav-link">12 - Выход из ремонтного цеха в наполнительный</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=1 %}" class="nav-link">
+                                1 - Погрузка полного баллона на трал 1
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=2 %}" class="nav-link">
+                                2 - Погрузка полного баллона на трал 2
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=3 %}" class="nav-link">
+                                3 - Приёмка пустого баллона из трала 1
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=4 %}" class="nav-link">
+                                4 - Приёмка пустого баллона из трала 2
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=5 %}" class="nav-link">
+                                5 - Регистрация полного баллона на складе
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=6 %}" class="nav-link">
+                                6 - Регистрация пустого баллона в цеху
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=7 %}" class="nav-link">
+                                7 - Наполнение баллона сжиженным газом. Карусель №1
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=8 %}" class="nav-link">
+                                8 - Наполнение баллона сжиженным газом. Карусель №2
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=9 %}" class="nav-link">
+                                9 - Вход в наполнительный цех из ремонтного
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=10 %}" class="nav-link">
+                                10 - Выход из наполнительного цеха в ремонтный
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=11 %}" class="nav-link">
+                                11 - Вход в ремонтный цех из наполнительного
+                            </a></li>
+                            <li><a href="{% url 'filling_station:reader' reader=12 %}" class="nav-link">
+                                12 - Выход из ремонтного цеха в наполнительный
+                            </a></li>
                         </ul>
                     </div>
                 </li>

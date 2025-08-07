@@ -2,15 +2,9 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.urls import reverse
-from django.db.models import Q, Sum
-from django.conf import settings
+from django.db.models import Q, Sum, Count
+from django.db.models.functions import Coalesce
 import pghistory
-
-
-BATCH_TYPE_CHOICES = [
-    ('l', 'Приёмка'),
-    ('u', 'Отгрузка'),
-]
 
 
 BALLOON_SIZE_CHOICES = [
@@ -90,6 +84,34 @@ class Reader(models.Model):
         verbose_name = "Считыватель"
         verbose_name_plural = "Считыватели"
         ordering = ['-change_date', '-change_time']
+
+    @classmethod
+    def get_reader_stats(cls, reader_number, start_date, end_date):
+
+        stats = {
+            **BalloonAmount.objects.filter(
+                reader_id=reader_number,
+                change_date__range=(start_date, end_date)
+            ).aggregate(
+                total_rfid=Coalesce(Sum('amount_of_rfid'), 0),
+                total_balloons=Coalesce(Sum('amount_of_balloons'), 0)
+            ),
+            'balloons_list': cls.objects.filter(number=reader_number).order_by('-change_date', '-change_time')
+        }
+
+        # Статистика по ТТН
+        if reader_number in [3, 4]:
+            stats['loading_ttn_quantity'] = BalloonsLoadingBatch.objects.filter(
+                reader_number=reader_number,
+                begin_date__range=(start_date, end_date)
+            ).aggregate(total_ttn=Sum('amount_of_ttn'))['total_ttn'] or 0
+        elif reader_number in [1, 2]:
+            stats['unloading_ttn_quantity'] = BalloonsUnloadingBatch.objects.filter(
+                reader_number=reader_number,
+                begin_date__range=(start_date, end_date)
+            ).aggregate(total_ttn=Sum('amount_of_ttn'))['total_ttn'] or 0
+
+        return stats
 
 
 class TruckType(models.Model):
@@ -214,8 +236,8 @@ class BalloonAmount(models.Model):
 
 
 class BalloonsLoadingBatch(models.Model):
-    begin_date = models.DateField(null=True, blank=True, auto_now_add=True, verbose_name="Дата начала приёмки")
-    begin_time = models.TimeField(null=True, blank=True, auto_now_add=True, verbose_name="Время начала приёмки")
+    begin_date = models.DateField(auto_now_add=True, verbose_name="Дата начала приёмки")
+    begin_time = models.TimeField(auto_now_add=True, verbose_name="Время начала приёмки")
     end_date = models.DateField(null=True, blank=True, verbose_name="Дата окончания приёмки")
     end_time = models.TimeField(null=True, blank=True, verbose_name="Время окончания приёмки")
     truck = models.ForeignKey(
@@ -232,18 +254,18 @@ class BalloonsLoadingBatch(models.Model):
         verbose_name="Прицеп"
     )
     reader_number = models.IntegerField(null=True, blank=True, verbose_name="Номер считывателя")
-    amount_of_rfid = models.IntegerField(null=True, blank=True, verbose_name="Количество баллонов по rfid")
-    amount_of_5_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 5л баллонов")
-    amount_of_12_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 12л баллонов")
-    amount_of_27_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 27л баллонов")
-    amount_of_50_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 50л баллонов")
+    amount_of_rfid = models.IntegerField(default=0, verbose_name="Количество баллонов по rfid")
+    amount_of_5_liters = models.IntegerField(default=0, verbose_name="Количество 5л баллонов")
+    amount_of_12_liters = models.IntegerField(default=0, verbose_name="Количество 12л баллонов")
+    amount_of_27_liters = models.IntegerField(default=0, verbose_name="Количество 27л баллонов")
+    amount_of_50_liters = models.IntegerField(default=0, verbose_name="Количество 50л баллонов")
     gas_amount = models.FloatField(null=True, blank=True, verbose_name="Количество принятого газа")
     balloon_list = models.ManyToManyField(
         Balloon,
         blank=True,
         verbose_name="Список баллонов"
     )
-    is_active = models.BooleanField(null=True, blank=True, verbose_name="В работе")
+    is_active = models.BooleanField(default=False, verbose_name="В работе")
     ttn = models.CharField(max_length=20, default='', verbose_name="Номер ТТН")
     amount_of_ttn = models.IntegerField(null=True, blank=True, verbose_name="Количество баллонов по ТТН")
     user = models.ForeignKey(
@@ -280,10 +302,106 @@ class BalloonsLoadingBatch(models.Model):
         total_amount = sum(amounts)
         return total_amount
 
+    def add_balloon(self, nfc_tag):
+        """
+        Добавляет баллон в партию по NFC-метке
+        Возвращает словарь с результатами операции:
+        {
+            'success': bool,
+            'balloon_id': int | None,
+            'new_count': int,
+            'error': str
+        }
+        """
+        result = {
+            'success': False,
+            'balloon_id': None,
+            'new_count': self.amount_of_rfid or 0,
+            'error': 'ok'
+        }
+
+        try:
+            balloon = Balloon.objects.get(nfc_tag=nfc_tag)
+
+            if self.balloon_list.filter(nfc_tag=nfc_tag).exists():
+                result['error'] = 'Баллон уже в партии'
+                return result
+
+            self.balloon_list.add(balloon)
+            self.amount_of_rfid = (self.amount_of_rfid or 0) + 1
+            self.save()
+
+            result.update({
+                'success': True,
+                'balloon_id': balloon.nfc_tag,
+                'new_count': self.amount_of_rfid
+            })
+
+        except Balloon.DoesNotExist:
+            result['error'] = 'Баллон не найден'
+        except Exception as e:
+            result['error'] = f'Ошибка сервера: {str(e)}'
+
+        return result
+
+    def remove_balloon(self, nfc_tag):
+        """
+        Удаляет баллон из партии по NFC-метке
+        Возвращает словарь с результатами операции:
+        {
+            'success': bool,
+            'balloon_id': int | None,
+            'new_count': int,
+            'error': str
+        }
+        """
+        result = {
+            'success': False,
+            'balloon_id': None,
+            'new_count': self.amount_of_rfid or 0,
+            'error': 'ok'
+        }
+
+        try:
+            balloon = Balloon.objects.get(nfc_tag=nfc_tag)
+
+            if not self.balloon_list.filter(nfc_tag=nfc_tag).exists():
+                result['error'] = 'Баллон не найден в партии'
+                return result
+
+            self.balloon_list.remove(balloon)
+            self.amount_of_rfid = max((self.amount_of_rfid or 0) - 1, 0)
+            self.save()
+
+            result.update({
+                'success': True,
+                'balloon_id': balloon.nfc_tag,
+                'new_count': self.amount_of_rfid
+            })
+
+        except Balloon.DoesNotExist:
+            result['error'] = 'Баллон не найден'
+        except Exception as e:
+            result['error'] = f'Ошибка сервера: {str(e)}'
+
+        return result
+
+    @classmethod
+    def get_period_stats(cls, start_date=None, end_date=None):
+        queryset = cls.objects.filter(begin_date__range=[start_date, end_date])
+
+        return queryset.annotate(
+            batch_balloon_count=Count('balloon_list'),
+        ).aggregate(
+            total_batches=Count('id'),
+            total_balloon_count_by_rfid=Sum('batch_balloon_count'),
+            total_balloon_count_by_ttn=Sum('amount_of_ttn'),
+        )
+
 
 class BalloonsUnloadingBatch(models.Model):
-    begin_date = models.DateField(null=True, blank=True, auto_now_add=True, verbose_name="Дата начала отгрузки")
-    begin_time = models.TimeField(null=True, blank=True, auto_now_add=True, verbose_name="Время начала отгрузки")
+    begin_date = models.DateField(auto_now_add=True, verbose_name="Дата начала отгрузки")
+    begin_time = models.TimeField(auto_now_add=True, verbose_name="Время начала отгрузки")
     end_date = models.DateField(null=True, blank=True, verbose_name="Дата окончания отгрузки")
     end_time = models.TimeField(null=True, blank=True, verbose_name="Время окончания отгрузки")
     truck = models.ForeignKey(
@@ -300,14 +418,14 @@ class BalloonsUnloadingBatch(models.Model):
         verbose_name="Прицеп"
     )
     reader_number = models.IntegerField(null=True, blank=True, verbose_name="Номер считывателя")
-    amount_of_rfid = models.IntegerField(null=True, blank=True, verbose_name="Количество баллонов по rfid")
-    amount_of_5_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 5л баллонов")
-    amount_of_12_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 12л баллонов")
-    amount_of_27_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 27л баллонов")
-    amount_of_50_liters = models.IntegerField(null=True, blank=True, default=0, verbose_name="Количество 50л баллонов")
+    amount_of_rfid = models.IntegerField(default=0, verbose_name="Количество баллонов по rfid")
+    amount_of_5_liters = models.IntegerField(default=0, verbose_name="Количество 5л баллонов")
+    amount_of_12_liters = models.IntegerField(default=0, verbose_name="Количество 12л баллонов")
+    amount_of_27_liters = models.IntegerField(default=0, verbose_name="Количество 27л баллонов")
+    amount_of_50_liters = models.IntegerField(default=0, verbose_name="Количество 50л баллонов")
     gas_amount = models.FloatField(null=True, blank=True, verbose_name="Количество отгруженного газа")
     balloon_list = models.ManyToManyField(Balloon, blank=True, verbose_name="Список баллонов")
-    is_active = models.BooleanField(null=True, blank=True, verbose_name="В работе")
+    is_active = models.BooleanField(default=False, verbose_name="В работе")
     ttn = models.CharField(max_length=20, default='', verbose_name="Номер ТТН")
     amount_of_ttn = models.IntegerField(null=True, blank=True, verbose_name="Количество баллонов по ТТН")
     user = models.ForeignKey(
@@ -343,3 +461,99 @@ class BalloonsUnloadingBatch(models.Model):
         ]
         total_amount = sum(amounts)
         return total_amount
+
+    def add_balloon(self, nfc_tag):
+        """
+        Добавляет баллон в партию по NFC-метке
+        Возвращает словарь с результатами операции:
+        {
+            'success': bool,
+            'balloon_id': int | None,
+            'new_count': int,
+            'error': str
+        }
+        """
+        result = {
+            'success': False,
+            'balloon_id': None,
+            'new_count': self.amount_of_rfid or 0,
+            'error': 'ok'
+        }
+
+        try:
+            balloon = Balloon.objects.get(nfc_tag=nfc_tag)
+
+            if self.balloon_list.filter(nfc_tag=nfc_tag).exists():
+                result['error'] = 'Баллон уже в партии'
+                return result
+
+            self.balloon_list.add(balloon)
+            self.amount_of_rfid = (self.amount_of_rfid or 0) + 1
+            self.save()
+
+            result.update({
+                'success': True,
+                'balloon_id': balloon.nfc_tag,
+                'new_count': self.amount_of_rfid
+            })
+
+        except Balloon.DoesNotExist:
+            result['error'] = 'Баллон не найден'
+        except Exception as e:
+            result['error'] = f'Ошибка сервера: {str(e)}'
+
+        return result
+
+    def remove_balloon(self, nfc_tag):
+        """
+        Удаляет баллон из партии по NFC-метке
+        Возвращает словарь с результатами операции:
+        {
+            'success': bool,
+            'balloon_id': int | None,
+            'new_count': int,
+            'error': str
+        }
+        """
+        result = {
+            'success': False,
+            'balloon_id': None,
+            'new_count': self.amount_of_rfid or 0,
+            'error': 'ok'
+        }
+
+        try:
+            balloon = Balloon.objects.get(nfc_tag=nfc_tag)
+
+            if not self.balloon_list.filter(nfc_tag=nfc_tag).exists():
+                result['error'] = 'Баллон не найден в партии'
+                return result
+
+            self.balloon_list.remove(balloon)
+            self.amount_of_rfid = max((self.amount_of_rfid or 0) - 1, 0)
+            self.save()
+
+            result.update({
+                'success': True,
+                'balloon_id': balloon.nfc_tag,
+                'new_count': self.amount_of_rfid
+            })
+
+        except Balloon.DoesNotExist:
+            result['error'] = 'Баллон не найден'
+        except Exception as e:
+            result['error'] = f'Ошибка сервера: {str(e)}'
+
+        return result
+
+    @classmethod
+    def get_period_stats(cls, start_date=None, end_date=None):
+        queryset = cls.objects.filter(begin_date__range=[start_date, end_date])
+
+        return queryset.annotate(
+            batch_balloon_count=Count('balloon_list'),
+        ).aggregate(
+            total_batches=Count('id'),
+            total_balloon_count_by_rfid=Sum('batch_balloon_count'),
+            total_balloon_count_by_ttn=Sum('amount_of_ttn'),
+        )

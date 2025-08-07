@@ -2,8 +2,20 @@ import os
 import asyncpg
 from datetime import datetime
 from dotenv import load_dotenv
+import django
+import logging
+from django.conf import settings
+
 
 load_dotenv()
+
+# Инициализация Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'GNS.settings')
+django.setup()
+
+# Конфигурация логирования из настроек Django
+logging.config.dictConfig(settings.LOGGING)
+logger = logging.getLogger('rfid')
 
 
 async def write_balloons_amount(reader: dict, from_who: str):
@@ -40,6 +52,9 @@ async def write_balloons_amount(reader: dict, from_who: str):
                 await conn.execute(insert_query, reader['number'], 0, current_date.date(), current_date.time(), 1,
                                    reader['status'])
 
+            logger.info(f'Данные по количеству баллонов добавлены в базу {reader['number']}, {current_date.time()}')
+            print(f'Данные по количеству баллонов добавлены в базу {reader['number']}, {current_date.time()}')
+
         else:
             if from_who == 'sensor':
                 update_query = """UPDATE public.filling_station_balloonamount 
@@ -53,7 +68,11 @@ async def write_balloons_amount(reader: dict, from_who: str):
                                   WHERE reader_id = $2 AND change_date = $3"""
                 await conn.execute(update_query, current_date.time(), reader['number'], current_date.date())
 
+            logger.info(f'Данные по количеству баллонов добавлены в базу {reader['number']}, {current_date.time()}')
+            print(f'Данные по количеству баллонов добавлены в базу {reader['number']}, {current_date.time()}')
+
     except Exception as error:
+        logger.error('Can`t establish connection to database:', error)
         print('Can`t establish connection to database:', error)
 
     finally:
