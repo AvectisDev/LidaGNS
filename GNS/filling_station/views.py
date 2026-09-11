@@ -1,38 +1,100 @@
-from django.shortcuts import render, redirect
+"""Представления веб-интерфейса ГНС: баллоны, партии, транспорт и статистика."""
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib import messages
+from core.mixins import CancelFormMixin, DateRangeListFilterMixin, ModalDeleteMixin, PreserveListQueryMixin
+from core.navigation import redirect_preserve_query
 from django.http import HttpResponse
 from django.core.paginator import Paginator
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse_lazy
 from django.views import generic
-from django.db.models import Q, Sum
-from .models import (Balloon, Truck, BalloonsLoadingBatch, BalloonsUnloadingBatch,
-                     BalloonAmount, Reader)
+from django.views.decorators.http import require_POST
+from django.db.models import Q, OuterRef, Prefetch, Subquery
+from .models import (
+    Balloon,
+    BalloonsBatch,
+    BatchStatus,
+    DailyReaderCounter,
+    Reader,
+    ReaderSettings,
+    Truck,
+)
 from .admin import BalloonResources
 from .forms import (
     GetBalloonsAmount,
     BalloonForm,
     TruckForm,
-    BalloonsLoadingBatchForm,
-    BalloonsUnloadingBatchForm
+    BalloonsBatchForm
 )
-from datetime import datetime, timedelta
+from .services import save_and_close_balloons_batch
+from datetime import datetime
 
-STATUS_LIST = {
-    1: 'Погрузка полного баллона на трал 1',
-    2: 'Погрузка полного баллона на трал 2',
-    3: 'Приёмка пустого баллона из трала 1',
-    4: 'Приёмка пустого баллона из трала 2',
-    5: 'Регистрация полного баллона на складе',
-    6: 'Регистрация пустого баллона в цеху',
-    7: 'Наполнение баллона сжиженным газом. Карусель №1',
-    8: 'Наполнение баллона сжиженным газом. Карусель №2',
-    9: 'Вход в наполнительный цех из ремонтного',
-    10: 'Выход из наполнительного цеха в ремонтный',
-    11: 'Вход в ремонтный цех из наполнительного',
-    12: 'Выход из ремонтного цеха в наполнительный',
-}
+
+def get_miriada_ttn_model():
+    """
+    Справочник ТТН Мириады, если приложение ``ttn`` его уже содержит.
+
+    Модель ``MiriadaTtn`` появится в ``ttn`` на следующем этапе синхронизации,
+    до этого номер ТТН в списках партий не отображается.
+
+    Returns:
+        type | None: класс модели ``MiriadaTtn`` либо ``None``.
+    """
+    try:
+        from ttn.models import MiriadaTtn
+    except ImportError:
+        return None
+    return MiriadaTtn
+
+
+def annotate_ttn_name(queryset):
+    """
+    Добавляет к партиям номер ТТН из Мириады подзапросом.
+
+    Args:
+        queryset: Queryset партий ``BalloonsBatch``.
+
+    Returns:
+        QuerySet: Queryset с полем ``ttn_name`` либо исходный без изменений.
+    """
+    miriada_ttn = get_miriada_ttn_model()
+    if miriada_ttn is None:
+        return queryset
+    ttn_name_sq = miriada_ttn.objects.filter(ttn_id=OuterRef('ttn_id')).values('name')[:1]
+    return queryset.annotate(ttn_name=Subquery(ttn_name_sq))
+
+
+def resolve_batch_list_query_filter(query):
+    """
+    Определяет подпись фильтра по строке поиска (ТТН или грузовик).
+
+    Returns:
+        dict | None: ``{'label': str, 'value': str}`` или ``None``.
+    """
+    query = (query or '').strip()
+    if not query:
+        return None
+
+    miriada_ttn = get_miriada_ttn_model()
+    ttn_match = bool(miriada_ttn) and miriada_ttn.objects.filter(name__icontains=query).exists()
+    truck_match = Truck.objects.filter(registration_number__icontains=query).exists()
+    if ttn_match and not truck_match:
+        label = 'Фильтр по номеру ТТН'
+    elif truck_match and not ttn_match:
+        label = 'Фильтр по номеру грузовика'
+    elif ttn_match and truck_match:
+        label = 'Фильтр по номеру ТТН' if query.isdigit() else 'Фильтр по номеру грузовика'
+    elif any(char.isalpha() for char in query):
+        label = 'Фильтр по номеру грузовика'
+    else:
+        label = 'Фильтр по номеру ТТН'
+
+    return {'label': label, 'value': query}
 
 
 class BalloonListView(generic.ListView):
+    """Список баллонов с поиском по NFC-метке или заводскому номеру."""
+
     model = Balloon
     paginate_by = 10
 
@@ -48,69 +110,91 @@ class BalloonListView(generic.ListView):
 
 
 class BalloonDetailView(generic.DetailView):
+    """Карточка баллона."""
+
     model = Balloon
 
 
-class BalloonUpdateView(generic.UpdateView):
+class BalloonUpdateView(PreserveListQueryMixin, generic.UpdateView):
+    """Редактирование паспорта баллона."""
+
     model = Balloon
     form_class = BalloonForm
     template_name = 'filling_station/_equipment_form.html'
 
+    def get_success_url(self):
+        """
+        URL карточки баллона после успешного сохранения.
 
-class BalloonDeleteView(generic.DeleteView):
+        Returns:
+            str: Абсолютный URL объекта.
+        """
+        return self.object.get_absolute_url()
+
+    def post(self, request, *args, **kwargs):
+        """
+        Обрабатывает отправку формы; при ``cancel`` возвращает на карточку.
+
+        Returns:
+            HttpResponse: Редирект или ответ базового ``post``.
+        """
+        if 'cancel' in request.POST:
+            return self.redirect_preserve_query('filling_station:balloon_detail', pk=self.get_object().pk)
+        return super().post(request, *args, **kwargs)
+
+
+class BalloonDeleteView(ModalDeleteMixin, PreserveListQueryMixin, generic.DeleteView):
+    """Удаление баллона через модальное окно."""
+
     model = Balloon
     success_url = reverse_lazy("filling_station:balloon_list")
-    template_name = 'filling_station/balloon_confirm_delete.html'
 
 
-def reader_info(request, reader=1):
+def reader_info(request, reader_number=1):
+    """
+    Страница статистики и журнала срабатываний RFID-считывателя.
+
+    Поддерживает фильтр по датам, пагинацию списка меток и экспорт в XLSX.
+
+    Args:
+        request: HTTP-запрос (POST ``action=export`` — выгрузка).
+        reader_number (int): Номер считывателя из URL.
+
+    Returns:
+        HttpResponse: HTML-страница или файл Excel при экспорте.
+    """
     current_date = datetime.now().date()
+    form = GetBalloonsAmount(request.POST or None)
 
-    if request.method == "POST":
-        form = GetBalloonsAmount(request.POST)
-        if form.is_valid():
-            start_date = form.cleaned_data['start_date']
-            end_date = form.cleaned_data['end_date']
-        else:
-            start_date = current_date
-            end_date = current_date
+    if request.method == "POST" and form.is_valid():
+        start_date = form.cleaned_data['start_date']
+        end_date = form.cleaned_data['end_date']
 
-        action = request.POST.get('action')
-
-        if action == 'export':
-            # Экспортируем данные в Excel
+        if request.POST.get('action') == 'export':
             dataset = BalloonResources().export(
                 Reader.objects.filter(
-                    number=reader,
+                    number=reader_number,
                     change_date__range=(start_date, end_date)
                 )
             )
             response = HttpResponse(dataset.xlsx, content_type='xlsx')
-            response['Content-Disposition'] = f'attachment; filename="RFID_{reader}_{start_date}-{end_date}.xlsx"'
+            response['Content-Disposition'] = (
+                f'attachment; filename="RFID_{reader_number}_{start_date}-{end_date}.xlsx"'
+            )
             return response
-
-        elif action == 'show':
-            # Показываем данные на странице
-            pass
-
     else:
-        form = GetBalloonsAmount()
-        start_date = current_date
-        end_date = current_date
+        start_date = end_date = current_date
 
-    # Получаем общее количество баллонов для каждого ридера за период
-    current_quantity = BalloonAmount.objects.filter(
-        reader_id=reader,
+    reader = ReaderSettings.objects.filter(number=reader_number).first()
+    if reader is not None:
+        counter_stats = DailyReaderCounter.get_reader_period_stats(reader, start_date, end_date)
+    else:
+        counter_stats = {'total_rfid': 0, 'total_sensor': 0}
+
+    balloons_list = Reader.objects.filter(
+        number=reader_number,
         change_date__range=(start_date, end_date)
-    ).aggregate(
-        total_rfid=Sum('amount_of_rfid'),
-        total_balloons=Sum('amount_of_balloons')
-    )
-
-    balloons_list = Reader.objects.order_by('-change_date', '-change_time').filter(number=reader)
-
-    current_quantity_rfid = current_quantity['total_rfid'] or 0
-    current_quantity_balloons = current_quantity['total_balloons'] or 0
+    ).order_by('-change_date', '-change_time')
 
     paginator = Paginator(balloons_list, 10)
     page_num = request.GET.get('page', 1)
@@ -118,78 +202,253 @@ def reader_info(request, reader=1):
 
     context = {
         "page_obj": page_obj,
-        'current_quantity_by_reader': current_quantity_rfid,
-        'current_quantity_by_sensor': current_quantity_balloons,
+        'current_quantity_by_reader': counter_stats['total_rfid'],
+        'current_quantity_by_sensor': counter_stats['total_sensor'],
         'form': form,
-        'reader': reader,
+        'reader': reader_number,
+        'reader_status': reader.status if reader else '',
         'start_date': start_date,
-        'end_date': end_date,
-        'reader_status': STATUS_LIST[reader]
+        'end_date': end_date
     }
     return render(request, 'filling_station/rfid_tables.html', context)
 
 
-# Партии приёмки баллонов
-class BalloonLoadingBatchListView(generic.ListView):
-    model = BalloonsLoadingBatch
+class BalloonBatchTypeMixin:
+    """Определяет тип партии (приёмка/отгрузка) по URL."""
+
+    def get_batch_type(self):
+        """
+        Извлекает тип партии из пути запроса.
+
+        Returns:
+            str | None: ``'u'`` (отгрузка), ``'l'`` (приёмка) или ``None``.
+        """
+        path = self.request.path.lower()
+        if 'unloading' in path:
+            return 'u'
+        if 'loading' in path:
+            return 'l'
+        return None
+
+
+# Единые классы для работы с партиями баллонов
+class BalloonBatchListView(DateRangeListFilterMixin, BalloonBatchTypeMixin, generic.ListView):
+    """Отображает список партий баллонов в зависимости от типа"""
+    model = BalloonsBatch
+    form_class = BalloonsBatchForm
     paginate_by = 10
     template_name = 'filling_station/balloon_batch_list.html'
 
+    def get_list_query_filter(self):
+        if hasattr(self, '_list_query_filter'):
+            return self._list_query_filter
+        query = self.request.GET.get('query', '').strip()
+        self._list_query_filter = query
+        return query
 
-class BalloonLoadingBatchDetailView(generic.DetailView):
-    model = BalloonsLoadingBatch
+    def get_queryset(self):
+        """
+        Список партий с ТТН, отфильтрованный по типу, дате и номеру ТС/ТТН.
+
+        Returns:
+            QuerySet: Партии приёмки, отгрузки или все.
+        """
+        batch_type = self.get_batch_type()
+        queryset = annotate_ttn_name(
+            BalloonsBatch.objects.select_related('truck', 'trailer', 'truck__type')
+        )
+        if batch_type:
+            queryset = queryset.filter(batch_type=batch_type)
+
+        query = self.get_list_query_filter()
+        queryset = self.apply_date_range_filter(queryset, field_name='started_at')
+        if query:
+            filters = Q(truck__registration_number__icontains=query)
+            miriada_ttn = get_miriada_ttn_model()
+            if miriada_ttn is not None:
+                ttn_ids = miriada_ttn.objects.filter(
+                    name__icontains=query,
+                ).values_list('ttn_id', flat=True)
+                filters |= Q(ttn_id__in=ttn_ids)
+            queryset = queryset.filter(filters)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        query = self.get_list_query_filter()
+        context['query'] = query
+        context['query_filter'] = resolve_batch_list_query_filter(query)
+        return context
+
+
+class BalloonBatchDetailView(BalloonBatchTypeMixin, generic.DetailView):
+    """Отображает детальное представление партии баллонов"""
+    model = BalloonsBatch
     context_object_name = 'batch'
     template_name = 'filling_station/balloon_batch_detail.html'
 
+    def get_queryset(self):
+        """
+        Queryset партии с предзагрузкой баллонов и именем ТТН.
 
-class BalloonLoadingBatchUpdateView(generic.UpdateView):
-    model = BalloonsLoadingBatch
-    form_class = BalloonsLoadingBatchForm
+        Returns:
+            QuerySet: Оптимизированный queryset с фильтром по типу партии.
+        """
+        queryset = annotate_ttn_name(
+            BalloonsBatch.objects.select_related(
+                'truck', 'trailer', 'truck__type'
+            ).prefetch_related(
+                Prefetch('balloon_list', queryset=Balloon.objects.order_by('nfc_tag'))
+            )
+        )
+        batch_type = self.get_batch_type()
+        if batch_type:
+            queryset = queryset.filter(batch_type=batch_type)
+        return queryset
+
+
+class BalloonBatchUpdateView(BalloonBatchTypeMixin, PreserveListQueryMixin, generic.UpdateView):
+    """Универсальное редактирование партии баллонов"""
+    model = BalloonsBatch
+    form_class = BalloonsBatchForm
     template_name = 'filling_station/_equipment_form.html'
 
+    def get_queryset(self):
+        """
+        Queryset партий с транспортом, ограниченный типом из URL.
 
-class BalloonLoadingBatchDeleteView(generic.DeleteView):
-    model = BalloonsLoadingBatch
-    success_url = reverse_lazy("filling_station:balloon_loading_batch_list")
-    template_name = 'filling_station/balloons_loading_batch_confirm_delete.html'
+        Returns:
+            QuerySet: Партии для редактирования.
+        """
+        queryset = BalloonsBatch.objects.select_related('truck', 'trailer', 'truck__type')
+        batch_type = self.get_batch_type()
+        if batch_type:
+            queryset = queryset.filter(batch_type=batch_type)
+        return queryset
+
+    def get_success_url(self):
+        """
+        URL карточки партии после сохранения.
+
+        Returns:
+            str: Абсолютный URL объекта.
+        """
+        return self.object.get_absolute_url()
+
+    def post(self, request, *args, **kwargs):
+        """
+        Обрабатывает форму; при ``cancel`` возвращает на карточку партии.
+
+        Returns:
+            HttpResponse: Редирект или ответ базового ``post``.
+        """
+        if 'cancel' in request.POST:
+            return redirect_preserve_query(request, self.get_object().get_absolute_url())
+        return super().post(request, *args, **kwargs)
 
 
-# Партии отгрузки баллонов
-class BalloonUnloadingBatchListView(generic.ListView):
-    model = BalloonsUnloadingBatch
-    paginate_by = 10
-    template_name = 'filling_station/balloon_batch_list.html'
+@require_POST
+def balloon_batch_retry_close(request, pk):
+    """Завершить партию: сохранить текущие данные и закрыть ТТН в Мириаде."""
+    path = request.path.lower()
+    batch_type = 'u' if 'unloading' in path else 'l'
+    batch = get_object_or_404(BalloonsBatch, pk=pk, batch_type=batch_type)
+
+    # Разрешаем повтор, только если есть флаг ошибки Мириады
+    if batch.status != BatchStatus.MIRIADA_ERROR:
+        messages.error(request, 'Партия не содержит ошибок.')
+        return redirect_preserve_query(request, batch.get_absolute_url())
+
+    success, error_payload, _ = save_and_close_balloons_batch(batch, request.POST)
+    if success:
+        messages.success(request, f'Партия №{batch.id} успешно завершена. ТТН закрыта в Мириаде.')
+    elif isinstance(error_payload, dict) and error_payload.get('message'):
+        messages.error(request, error_payload['message'])
+    elif error_payload:
+        messages.error(request, error_payload)
+
+    return redirect_preserve_query(request, batch.get_absolute_url())
 
 
-class BalloonUnloadingBatchDetailView(generic.DetailView):
-    model = BalloonsUnloadingBatch
-    context_object_name = 'batch'
-    template_name = 'filling_station/balloon_batch_detail.html'
+class BalloonBatchDeleteView(BalloonBatchTypeMixin, ModalDeleteMixin, PreserveListQueryMixin, generic.DeleteView):
+    """Универсальное удаление партии баллонов"""
+    model = BalloonsBatch
+
+    def get_queryset(self):
+        """
+        Queryset партий для удаления с фильтром по типу из URL.
+
+        Returns:
+            QuerySet: Партии приёмки или отгрузки.
+        """
+        queryset = BalloonsBatch.objects.select_related('truck', 'trailer', 'truck__type')
+        batch_type = self.get_batch_type()
+        if batch_type:
+            queryset = queryset.filter(batch_type=batch_type)
+        return queryset
+
+    def get_success_url(self):
+        """
+        Список партий того же типа после удаления.
+
+        Returns:
+            str: URL списка приёмки или отгрузки.
+        """
+        if self.get_batch_type() == 'u':
+            return reverse_lazy("filling_station:balloon_unloading_batch_list")
+        return reverse_lazy("filling_station:balloon_loading_batch_list")
 
 
-class BalloonUnloadingBatchUpdateView(generic.UpdateView):
-    model = BalloonsUnloadingBatch
-    form_class = BalloonsUnloadingBatchForm
-    template_name = 'filling_station/_equipment_form.html'
+# Алиасы для обратной совместимости
+BalloonLoadingBatchListView = BalloonBatchListView
+BalloonLoadingBatchDetailView = BalloonBatchDetailView
+BalloonLoadingBatchUpdateView = BalloonBatchUpdateView
+BalloonLoadingBatchDeleteView = BalloonBatchDeleteView
 
-
-class BalloonUnloadingBatchDeleteView(generic.DeleteView):
-    model = BalloonsUnloadingBatch
-    success_url = reverse_lazy("filling_station:balloon_unloading_batch_list")
-    template_name = 'filling_station/balloons_unloading_batch_confirm_delete.html'
+BalloonUnloadingBatchListView = BalloonBatchListView
+BalloonUnloadingBatchDetailView = BalloonBatchDetailView
+BalloonUnloadingBatchUpdateView = BalloonBatchUpdateView
+BalloonUnloadingBatchDeleteView = BalloonBatchDeleteView
 
 
 # Грузовики
 class TruckView(generic.ListView):
+    """Список грузовиков с поиском по госномеру или марке."""
+
     model = Truck
     paginate_by = 10
 
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related('type')
+        query = self.request.GET.get('query', '').strip()
+        if query:
+            queryset = queryset.filter(
+                Q(registration_number__icontains=query) | Q(car_brand__icontains=query)
+            )
+        return queryset
+
 
 class TruckDetailView(generic.DetailView):
+    """Карточка грузовика."""
+
     model = Truck
 
 
-class TruckCreateView(generic.CreateView):
+class TruckCreateView(CancelFormMixin, PreserveListQueryMixin, generic.CreateView):
+    """Создание записи грузовика."""
+
+    model = Truck
+    form_class = TruckForm
+    template_name = 'filling_station/_equipment_form.html'
+    cancel_url = reverse_lazy('filling_station:truck_list')
+
+    def get_success_url(self):
+        return self.object.get_absolute_url()
+
+
+class TruckUpdateView(PreserveListQueryMixin, generic.UpdateView):
+    """Редактирование грузовика."""
+
     model = Truck
     form_class = TruckForm
     template_name = 'filling_station/_equipment_form.html'
@@ -197,21 +456,36 @@ class TruckCreateView(generic.CreateView):
     def get_success_url(self):
         return self.object.get_absolute_url()
 
+    def post(self, request, *args, **kwargs):
+        """
+        Обрабатывает форму; при ``cancel`` возвращает на карточку грузовика.
 
-class TruckUpdateView(generic.UpdateView):
-    model = Truck
-    form_class = TruckForm
-    template_name = 'filling_station/_equipment_form.html'
+        Returns:
+            HttpResponse: Редирект или ответ базового ``post``.
+        """
+        if 'cancel' in request.POST:
+            return self.redirect_preserve_query('filling_station:truck_detail', pk=self.get_object().pk)
+        return super().post(request, *args, **kwargs)
 
 
-class TruckDeleteView(generic.DeleteView):
+class TruckDeleteView(ModalDeleteMixin, PreserveListQueryMixin, generic.DeleteView):
+    """Удаление грузовика через модальное окно."""
+
     model = Truck
     success_url = reverse_lazy("filling_station:truck_list")
-    template_name = 'filling_station/truck_confirm_delete.html'
 
 
 # Обработка данных для вкладки "Статистика"
 def statistic(request):
+    """
+    Сводная статистика ГНС за выбранный период.
+
+    Args:
+        request: HTTP-запрос с формой дат (GET/POST).
+
+    Returns:
+        HttpResponse: Страница ``statistic.html`` с агрегатами по считывателям и партиям.
+    """
     current_date = datetime.now().date()
 
     if request.method == "POST":
@@ -220,36 +494,26 @@ def statistic(request):
             start_date = form.cleaned_data['start_date']
             end_date = form.cleaned_data['end_date']
         else:
-            start_date = current_date
-            end_date = current_date
+            start_date = end_date = current_date
+            form = GetBalloonsAmount(initial={
+                'start_date': start_date,
+                'end_date': end_date,
+            })
     else:
-        form = GetBalloonsAmount()
-        start_date = current_date
-        end_date = current_date
+        start_date = end_date = current_date
+        form = GetBalloonsAmount(initial={
+            'start_date': start_date,
+            'end_date': end_date,
+        })
 
-    # Получаем общее количество баллонов для каждого ридера за период
-    readers_data = {
-        f'balloons_quantity_by_reader_{i}': BalloonAmount.objects.filter(
-            reader_id=i,
-            change_date__range=[start_date, end_date]
-        ).aggregate(total=Sum('amount_of_rfid'))['total'] or 0
-        for i in range(1, 9)
-    }
-
-    # Получаем количество партий для каждой модели за период
-    batches_data = {
-        'balloons_loading_batches': BalloonsLoadingBatch.objects.filter(
-            begin_date__range=[start_date, end_date]
-        ).count(),
-        'balloons_unloading_batches': BalloonsUnloadingBatch.objects.filter(
-            begin_date__range=[start_date, end_date]
-        ).count(),
-    }
-
-    # Объединяем данные в контекст
     context = {
-        **readers_data,
-        **batches_data,
+        'readers_stats': Reader.get_all_readers_stats(start_date, end_date),
+        'balloon_loading_stats': BalloonsBatch.get_period_stats(
+            start_date, end_date, batch_type='l'
+        ),
+        'balloon_unloading_stats': BalloonsBatch.get_period_stats(
+            start_date, end_date, batch_type='u'
+        ),
         'form': form,
         'start_date': start_date,
         'end_date': end_date,

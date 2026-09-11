@@ -1,11 +1,48 @@
 {% extends 'base.html' %}
-{% load custom_filters %}
+{% load custom_filters navigation %}
 
 {% block title %} {{ title }} {% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h4 class="mb-4"> {{ title }} </h4>
+    <div class="batch-list-toolbar d-flex align-items-center mb-4">
+        <h4 class="mb-0 text-nowrap">{{ title }}</h4>
+
+        <form method="get" class="batch-list-filter d-flex align-items-center ms-auto gap-3">
+            <div class="batch-list-filter-field">
+                <input type="text" name="query" class="form-control batch-filter-query"
+                       placeholder="Номер Грузовика / ТТН" value="{{ query }}" maxlength="20"
+                       title="Номер грузовика или ТТН">
+            </div>
+            <div class="batch-list-filter-field">
+                {{ form.start_date }}
+            </div>
+            <div class="batch-list-filter-field">
+                {{ form.end_date }}
+            </div>
+            <div class="batch-list-filter-field d-flex gap-2">
+                <button class="btn btn-custom text-nowrap" type="submit">
+                    <i class="bi bi-funnel"></i> Показать
+                </button>
+                <a href="{{ request.path }}" class="btn btn-outline-secondary" title="Сбросить фильтры">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    {% if start_date and end_date or query_filter %}
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle"></i>
+        {% if start_date and end_date %}
+        Период: <strong>{{ start_date|date:"d.m.Y" }}</strong> - <strong>{{ end_date|date:"d.m.Y" }}</strong>
+        {% endif %}
+        {% if query_filter %}
+        {% if start_date and end_date %} | {% endif %}
+        {{ query_filter.label }}: <strong>{{ query_filter.value }}</strong>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <div class="card shadow-sm">
         <div class="card-body">
@@ -14,8 +51,8 @@
                     <thead class="table-light">
                         <tr>
                             <th>Номер партии</th>
-                            <th>Дата и время начала</th>
-                            <th>Дата и время окончания</th>
+                            <th>Начата</th>
+                            <th>Завершена</th>
                             <th>Автомобиль</th>
                             <th>Прицеп</th>
                             <th>Баллонов (RFID)</th>
@@ -29,22 +66,22 @@
                         {% for batch in page_obj.object_list %}
                         <tr>
                             <td>
-                                <a href="{{ batch.get_absolute_url }}" class="custom-link fw-bold">
+                                <a href="{% url_with_query batch.get_absolute_url %}" class="custom-link fw-bold">
                                     {{ batch.id }}
                                 </a>
                             </td>
                             <td>
-                                {% if batch.begin_date %}
-                                <div>{{ batch.begin_date|date:"d.m.Y" }}</div>
-                                <small class="text-muted">{{ batch.begin_time|time:"H:i" }}</small>
+                                {% if batch.started_at %}
+                                <div>{{ batch.started_at|date:"d.m.Y" }}</div>
+                                <small class="text-muted">{{ batch.started_at|time:"H:i" }}</small>
                                 {% else %}
                                 -
                                 {% endif %}
                             </td>
                             <td>
-                                {% if batch.end_date %}
-                                <div>{{ batch.end_date|date:"d.m.Y" }}</div>
-                                <small class="text-muted">{{ batch.end_time|time:"H:i" }}</small>
+                                {% if batch.completed_at %}
+                                <div>{{ batch.completed_at|date:"d.m.Y" }}</div>
+                                <small class="text-muted">{{ batch.completed_at|time:"H:i" }}</small>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -53,22 +90,24 @@
                             <td>{{ batch.trailer|default:"-" }}</td>
                             <td>{{ batch.amount_of_rfid|default:"-" }}</td>
                             <td>{{ batch.get_amount_without_rfid|default:"-" }}</td>
-                            <td>{{ batch.ttn|default:"-" }}</td>
+                            <td>{{ batch.ttn_name|default:"-" }}</td>
                             <td>
-                                {% if batch.is_active %}
-                                    <span class="badge bg-success">Активна</span>
+                                {% if batch.status == 'active' %}
+                                    <span class="badge bg-success">В работе</span>
+                                {% elif batch.status == 'paused' %}
+                                    <span class="badge bg-warning text-dark">Приостановлена</span>
+                                {% elif batch.status == 'miriada_error' %}
+                                    <span class="badge bg-danger">Ошибка Мириады</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Завершена</span>
                                 {% endif %}
                             </td>
                             <td>
                                 <div class="action-buttons">
-                                    <a href="{{ batch.get_update_url }}" class="btn-icon btn-edit" title="Редактировать">
+                                    <a href="{% url_with_query batch.get_update_url %}" class="btn-icon btn-edit" title="Редактировать">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <a href="{{ batch.get_delete_url }}" class="btn-icon btn-delete" title="Удалить">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                                    {% include 'core/_delete_trigger.html' with url=batch.get_delete_url message="Вы уверены, что хотите удалить партию?" icon_only=True %}
                                 </div>
                             </td>
                         </tr>
@@ -81,7 +120,9 @@
                 </table>
             </div>
 
-            {% include 'filling_station/_paginator.html' %}
+            <div class="mt-4">
+                {% include 'core/_paginator.html' %}
+            </div>
         </div>
     </div>
 </div>

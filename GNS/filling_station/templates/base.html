@@ -5,9 +5,9 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %} Газонаполнительная станция {% endblock %}</title>
-    <link rel="shortcut icon" type="image/ico" href='/static/filling_station/media/Gas.ico'/>
-    <link rel="stylesheet" href="/static/filling_station/bootstrap/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/filling_station/bootstrap/icons/font/bootstrap-icons.css">
+    <link rel="shortcut icon" type="image/ico" href="{% static 'filling_station/media/Gas.ico' %}"/>
+    <link rel="stylesheet" href="{% static 'filling_station/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'filling_station/bootstrap/icons/font/bootstrap-icons.css' %}">
     <link rel="stylesheet" href="{% static 'filling_station/css/tables.css' %}">
     <link rel="stylesheet" href="{% static 'filling_station/css/menu.css' %}">
 </head>
@@ -15,7 +15,7 @@
 <body>
     <div class="sidebar d-flex flex-column flex-shrink-0 p-0">
         <div class="logo-container">
-            <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-decoration-none">
+            <a href="{% url 'filling_station:balloon_list' %}" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-decoration-none">
                 <img src="{% static 'filling_station/media/logo_white.svg' %}" width="80%" alt="Логотип">
             </a>
         </div>
@@ -30,25 +30,26 @@
                 </li>
 
                 <li>
-                    <a class="nav-link collapsed" data-bs-toggle="collapse" href="#readers-collapse">
+                    <a class="nav-link collapsed" data-bs-toggle="collapse" href="#readers-collapse"
+                       data-auto-expand="{% if '/reader/' in request.path %}true{% else %}false{% endif %}">
                         <i class="bi bi-cpu me-2"></i>
                         Считыватели
                         <i class="bi bi-chevron-down ms-auto"></i>
                     </a>
                     <div class="collapse" id="readers-collapse">
                         <ul class="nav flex-column ps-3">
-                            <li><a href="/reader/1" class="nav-link">1 - Погрузка полного баллона на трал 1</a></li>
-                            <li><a href="/reader/2" class="nav-link">2 - Погрузка полного баллона на трал 2</a></li>
-                            <li><a href="/reader/3" class="nav-link">3 - Приёмка пустого баллона из трала 1</a></li>
-                            <li><a href="/reader/4" class="nav-link">4 - Приёмка пустого баллона из трала 2</a></li>
-                            <li><a href="/reader/5" class="nav-link">5 - Регистрация полного баллона на складе</a></li>
-                            <li><a href="/reader/6" class="nav-link">6 - Регистрация пустого баллона в цеху</a></li>
-                            <li><a href="/reader/7" class="nav-link">7 - Наполнение баллона сжиженным газом. Карусель №1</a></li>
-                            <li><a href="/reader/8" class="nav-link">8 - Наполнение баллона сжиженным газом. Карусель №2</a></li>
-                            <li><a href="/reader/9" class="nav-link">9 - Вход в наполнительный цех из ремонтного</a></li>
-                            <li><a href="/reader/10" class="nav-link">10 - Выход из наполнительного цеха в ремонтный</a></li>
-                            <li><a href="/reader/11" class="nav-link">11 - Вход в ремонтный цех из наполнительного</a></li>
-                            <li><a href="/reader/12" class="nav-link">12 - Выход из ремонтного цеха в наполнительный</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=1 %}" class="nav-link">1 - Погрузка полного баллона на трал 1</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=2 %}" class="nav-link">2 - Погрузка полного баллона на трал 2</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=3 %}" class="nav-link">3 - Приёмка пустого баллона из трала 1</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=4 %}" class="nav-link">4 - Приёмка пустого баллона из трала 2</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=5 %}" class="nav-link">5 - Регистрация полного баллона на складе</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=6 %}" class="nav-link">6 - Регистрация пустого баллона в цеху</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=7 %}" class="nav-link">7 - Наполнение баллона сжиженным газом. Карусель №1</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=8 %}" class="nav-link">8 - Наполнение баллона сжиженным газом. Карусель №2</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=9 %}" class="nav-link">9 - Вход в наполнительный цех из ремонтного</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=10 %}" class="nav-link">10 - Выход из наполнительного цеха в ремонтный</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=11 %}" class="nav-link">11 - Вход в ремонтный цех из наполнительного</a></li>
+                            <li><a href="{% url 'filling_station:reader' reader_number=12 %}" class="nav-link">12 - Выход из ремонтного цеха в наполнительный</a></li>
                         </ul>
                     </div>
                 </li>
@@ -100,6 +101,13 @@
                         Настройки карусели
                     </a>
                 </li>
+
+                <li class="nav-item">
+                    <a href="{% url 'filling_station:statistic' %}" class="nav-link">
+                        <i class="bi bi-graph-up me-2"></i>
+                        Статистика
+                    </a>
+                </li>
             </ul>
         </div>
 
@@ -114,12 +122,58 @@
     </div>
 
     <div class="main-content">
+        {% if messages %}
+            <div class="px-3 pt-3">
+                {% for message in messages %}
+                    <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show js-auto-dismiss-alert" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
         {% block content %}
         {% endblock content %}
     </div>
 
-    <script src="/static/filling_station/bootstrap/jquery-3.5.1.slim.min.js"></script>
-    <script type="text/javascript" src="/static/filling_station/bootstrap/js/bootstrap.bundle.min.js"></script>
+{% include 'core/_delete_modal.html' %}
+
+<script src="{% static 'filling_station/bootstrap/jquery-3.5.1.slim.min.js' %}"></script>
+<script type="text/javascript" src="{% static 'filling_station/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+    (function () {
+        document.querySelectorAll('.js-auto-dismiss-alert').forEach(function (el) {
+            setTimeout(function () {
+                const alert = bootstrap.Alert.getOrCreateInstance(el);
+                alert.close();
+            }, 5000);
+        });
+    })();
+
+    (function () {
+        const modalEl = document.getElementById('deleteConfirmModal');
+        if (!modalEl) return;
+
+        const modal = new bootstrap.Modal(modalEl);
+        const form = document.getElementById('deleteConfirmForm');
+        const messageEl = document.getElementById('deleteConfirmMessage');
+
+        document.addEventListener('click', function (event) {
+            const trigger = event.target.closest('.js-delete-trigger');
+            if (!trigger) return;
+
+            event.preventDefault();
+            const url = trigger.getAttribute('href');
+            if (!url || url === '#') return;
+
+            form.action = url;
+            messageEl.textContent = trigger.dataset.deleteMessage
+                || 'Вы уверены, что хотите удалить запись?';
+            modal.show();
+        });
+    })();
+</script>
+{% block extra_scripts %}{% endblock %}
     <script>
         // Активация текущего пункта меню (игнор trailing slash)
         const normalizeUrl = (href) => href.replace(/\/$/, '');

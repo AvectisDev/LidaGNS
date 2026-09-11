@@ -1,7 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import User
 from django.urls import reverse
-from filling_station.models import BalloonsLoadingBatch, BalloonsUnloadingBatch
+from filling_station.models import BalloonsBatch
 
 
 class Contractor(models.Model):
@@ -59,22 +58,24 @@ class BalloonTtn(models.Model):
         related_name='balloons_city'
     )
     loading_batch = models.ForeignKey(
-        BalloonsLoadingBatch,
+        BalloonsBatch,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         verbose_name="Партия приёмки",
-        related_name='balloons_ttn_loading'
+        related_name='balloons_ttn_loading',
+        limit_choices_to={'batch_type': 'l'},
     )
     unloading_batch = models.ForeignKey(
-        BalloonsUnloadingBatch,
+        BalloonsBatch,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         verbose_name="Партия отгрузки",
-        related_name='balloons_ttn_unloading'
+        related_name='balloons_ttn_unloading',
+        limit_choices_to={'batch_type': 'u'},
     )
-    date = models.DateField(null=True, blank=True, verbose_name="Дата формирования накладной")
+    date = models.DateTimeField(auto_now_add=True, verbose_name="Дата формирования накладной")
 
     def __str__(self):
         return self.number
@@ -116,3 +117,21 @@ class FilePath(models.Model):
     class Meta:
         verbose_name = "Путь сохранения файла"
         verbose_name_plural = "Путь сохранения файла"
+
+
+class MiriadaTtn(models.Model):
+    """Текущая ТТН, полученная из API Мириады."""
+
+    ttn_id = models.IntegerField(unique=True, verbose_name="ID ТТН в Мириаде")
+    name = models.CharField(max_length=100, verbose_name="Номер ТТН")
+    auto = models.CharField(max_length=50, verbose_name="Номер автомобиля")
+    date = models.DateField(null=True, blank=True, verbose_name="Дата ТТН")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления записи")
+
+    def __str__(self):
+        return f"{self.name} (ID: {self.ttn_id})"
+
+    class Meta:
+        verbose_name = "ТТН из Мириады"
+        verbose_name_plural = "ТТН из Мириады"
+        ordering = ['-updated_at']

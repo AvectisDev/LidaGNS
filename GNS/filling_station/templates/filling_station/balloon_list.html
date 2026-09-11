@@ -1,25 +1,14 @@
 {% extends 'base.html' %}
-{% load custom_filters %}
+{% load custom_filters navigation %}
 
 {% block title %}Архив баллонов{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Архив баллонов</h4>
-
-     <div class="col-md-6">
-            <form method="get" action="{% url 'filling_station:balloon_list' %}" class="row g-2 align-items-center">
-                <div class="col-md-8">
-                    <input type="text" name="query" class="form-control"
-                           placeholder="Номер метки или серийный номер" value="{{ request.GET.query }}">
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-custom w-100">
-                        <i class="bi bi-funnel"></i> Фильтровать
-                    </button>
-                </div>
-            </form>
+    <div class="batch-list-toolbar d-flex align-items-center mb-4">
+        <h4 class="mb-0 text-nowrap">Архив баллонов</h4>
+        <div class="ms-auto">
+            {% include 'core/_text_query_filter.html' with query_placeholder='Номер метки или серийный номер' filter_width_class='list-filter-query--balloon' %}
         </div>
     </div>
 
@@ -40,10 +29,10 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {% for balloon in balloon_list %}
+                    {% for balloon in page_obj.object_list %}
                     <tr>
                         <td>
-                            <a href="{{ balloon.get_absolute_url }}" class="custom-link fw-bold">
+                            <a href="{% url_with_query balloon.get_absolute_url %}" class="custom-link fw-bold">
                                 {{ balloon.nfc_tag|default:"-" }}
                             </a>
                         </td>
@@ -58,12 +47,10 @@
                         </td>
                         <td>
                             <div class="action-buttons">
-                                <a href="{{ balloon.get_update_url }}" class="btn-icon btn-edit" title="Редактировать">
+                                <a href="{% url_with_query balloon.get_update_url %}" class="btn-icon btn-edit" title="Редактировать">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                <a href="{{ balloon.get_delete_url }}" class="btn-icon btn-delete" title="Удалить">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                                {% include 'core/_delete_trigger.html' with url=balloon.get_delete_url message="Вы уверены, что хотите удалить баллон?" icon_only=True %}
                             </div>
                         </td>
                     </tr>
@@ -76,9 +63,11 @@
                 </table>
             </div>
 
-            {% include 'filling_station/_paginator.html' %}
+            <div class="mt-4">
+                {% include 'core/_paginator.html' %}
+            </div>
+
         </div>
     </div>
 </div>
-
 {% endblock %}

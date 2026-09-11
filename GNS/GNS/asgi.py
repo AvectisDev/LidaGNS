@@ -11,7 +11,7 @@ def start_processes():
     global processes
     print('Запускаем процессы...')
     python = sys.executable
-    p1 = subprocess.Popen([python, '-m', 'filling_station.management.commands.rfid.main'])
+    p1 = subprocess.Popen([python, '-m', 'filling_station.management.commands.rfid_utils.feig_protocol'])
     p2 = subprocess.Popen([python, '-m', 'carousel.management.commands.carousel.main'])
     processes.extend([p1, p2])
     print(f'Процессы запущены: {processes}')

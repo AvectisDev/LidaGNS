@@ -1,6 +1,14 @@
 from django.contrib import admin
-from .models import Balloon, Truck, TruckType, Trailer, TrailerType, BalloonsLoadingBatch, BalloonsUnloadingBatch, ReaderSettings
 from import_export import resources
+from .models import (
+    Balloon,
+    Truck,
+    TruckType,
+    Trailer,
+    TrailerType,
+    BalloonsBatch,
+    ReaderSettings
+)
 
 
 class BalloonResources(resources.ModelResource):
@@ -59,51 +67,77 @@ class TruckTypeAdmin(admin.ModelAdmin):
     list_display = ['id', 'type']
 
 
-@admin.register(BalloonsLoadingBatch)
-class BalloonsLoadingBatchAdmin(admin.ModelAdmin):
+@admin.register(Trailer)
+class TrailerAdmin(admin.ModelAdmin):
     list_display = [
         'id',
-        'begin_date',
-        'begin_time',
-        'end_date',
-        'end_time',
+        'truck',
+        'trailer_brand',
+        'registration_number',
+        'type',
+        'capacity_cylinders',
+        'max_weight_of_transported_cylinders',
+        'max_mass_of_transported_gas',
+        'max_gas_volume',
+        'empty_weight',
+        'full_weight',
+        'is_on_station',
+        'entry_date',
+        'entry_time',
+        'departure_date',
+        'departure_time'
+    ]
+    search_fields = [
+        'trailer_brand',
+        'registration_number',
+        'type',
+        'is_on_station'
+    ]
+
+
+@admin.register(TrailerType)
+class TrailerTypeAdmin(admin.ModelAdmin):
+    list_display = ['id', 'type']
+
+
+@admin.register(BalloonsBatch)
+class BalloonsBatchAdmin(admin.ModelAdmin):
+    """Админка партий приёмки и отгрузки баллонов."""
+
+    list_display = [
+        'id',
+        'batch_type',
+        'started_at',
+        'completed_at',
         'truck',
         'trailer',
         'reader_number',
         'amount_of_rfid',
+        'amount_of_sensor',
+        'amount_of_ttn',
         'amount_of_5_liters',
         'amount_of_12_liters',
         'amount_of_27_liters',
         'amount_of_50_liters',
         'gas_amount',
-        'is_active',
-        'ttn',
-        'amount_of_ttn'
+        'status',
+        'miriada_close_failed',
+        'display_ttn_name',
+        'balloons_type',
     ]
-    list_filter = ['begin_date', 'end_date', 'is_active']
-    search_fields = ['truck', 'is_active', 'ttn']
+    list_filter = ['batch_type', 'started_at', 'completed_at', 'status', 'miriada_close_failed']
+    search_fields = ['truck__registration_number', 'ttn_id', 'batch_type']
+    list_select_related = ['truck', 'trailer']
 
+    @admin.display(description='Номер ТТН')
+    def display_ttn_name(self, obj):
+        """
+        Возвращает номер связанной ТТН для колонки списка.
 
-@admin.register(BalloonsUnloadingBatch)
-class BalloonsUnloadingBatchAdmin(admin.ModelAdmin):
-    list_display = [
-        'id',
-        'begin_date',
-        'begin_time',
-        'end_date',
-        'end_time',
-        'truck',
-        'trailer',
-        'reader_number',
-        'amount_of_rfid',
-        'amount_of_5_liters',
-        'amount_of_12_liters',
-        'amount_of_27_liters',
-        'amount_of_50_liters',
-        'gas_amount',
-        'is_active',
-        'ttn',
-        'amount_of_ttn'
-    ]
-    list_filter = ['begin_date', 'end_date', 'is_active']
-    search_fields = ['truck', 'ttn']
+        Args:
+            obj (BalloonsBatch): Экземпляр партии.
+
+        Returns:
+            str: Номер ТТН или «—», если номер отсутствует.
+        """
+        return obj.get_ttn_name() or '—'

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import BalloonTtn, Contractor, City, FilePath
+from .models import BalloonTtn, Contractor, City, FilePath, MiriadaTtn
 
 @admin.register(BalloonTtn)
 class TTNAdmin(admin.ModelAdmin):
@@ -36,3 +36,9 @@ class CityAdmin(admin.ModelAdmin):
 @admin.register(FilePath)
 class FilePathAdmin(admin.ModelAdmin):
     list_display = ['path']
+
+
+@admin.register(MiriadaTtn)
+class MiriadaTtnAdmin(admin.ModelAdmin):
+    list_display = ['ttn_id', 'name', 'auto', 'date', 'updated_at']
+    search_fields = ['name', 'auto']

@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Статистика по ГНС{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Статистика по ГНС</h4>
+        <form method="post" class="d-flex align-items-center">
+            {% csrf_token %}
+            <div class="me-2">
+                {{ form.start_date }}
+            </div>
+            <div class="me-2">
+                {{ form.end_date }}
+            </div>
+            <button class="btn btn-custom" type="submit">
+                <i class="bi bi-calendar-range"></i> Показать
+            </button>
+        </form>
+    </div>
+
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle"></i>
+        Период: <strong>{{ start_date|date:"d.m.Y" }}</strong> - <strong>{{ end_date|date:"d.m.Y" }}</strong>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header card-header-custom">
+                    <h5 class="mb-0"><i class="bi bi-rss"></i> RFID-считыватели</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Считыватель</th>
+                                    <th>Описание</th>
+                                    <th class="text-center">По RFID</th>
+                                    <th class="text-center">По датчику</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in readers_stats %}
+                                <tr>
+                                    <td>{{ stat.number }}</td>
+                                    <td>{{ stat.status|default:"-" }}</td>
+                                    <td class="text-center">{{ stat.total_rfid }}</td>
+                                    <td class="text-center">{{ stat.total_sensor }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">Нет настроенных считывателей</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header card-header-custom">
+                    <h5 class="mb-0"><i class="bi bi-clipboard-data"></i> Статистика партий баллонов</h5>
+                </div>
+                <div class="card-body">
+                    <div class="card border-primary h-100">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">
+                                <i class="bi bi-cylinder"></i> Баллоны
+                            </h5>
+                            <div class="mb-3">
+                                <h6 class="text-center">Приёмка</h6>
+                                <div class="d-flex justify-content-between">
+                                    <span>Партии:</span>
+                                    <strong>{{ balloon_loading_stats.total_batches }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Баллонов с RFID:</span>
+                                    <strong>{{ balloon_loading_stats.total_balloon_count_by_rfid|default:"-" }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Баллонов по ТТН:</span>
+                                    <strong>{{ balloon_loading_stats.total_balloon_count_by_ttn|default:"-" }}</strong>
+                                </div>
+                            </div>
+                            <hr>
+                            <div>
+                                <h6 class="text-center">Отгрузка</h6>
+                                <div class="d-flex justify-content-between">
+                                    <span>Партии:</span>
+                                    <strong>{{ balloon_unloading_stats.total_batches }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Баллонов с RFID:</span>
+                                    <strong>{{ balloon_unloading_stats.total_balloon_count_by_rfid|default:"-" }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Баллонов по ТТН:</span>
+                                    <strong>{{ balloon_unloading_stats.total_balloon_count_by_ttn|default:"-" }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 from django import forms
 from django.utils.html import format_html
-from filling_station.models import BalloonsLoadingBatch, BalloonsUnloadingBatch
+from filling_station.models import BalloonsBatch
 from .models import BalloonTtn
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit
@@ -13,7 +13,8 @@ class BalloonTtnForm(forms.ModelForm):
         self.helper.form_class = 'form-horizontal'
         self.helper.label_class = 'col-lg-4'
         self.helper.field_class = 'col-lg-8'
-        self.helper.add_input(Submit('Сохранить', 'Сохранить', css_class='btn btn-success'))
+        self.helper.add_input(Submit('save', 'Сохранить', css_class='btn btn-success'))
+        self.helper.add_input(Submit('cancel', 'Отмена', css_class='btn btn-secondary'))
         self.helper.form_method = 'POST'
 
         self.fields['shipper'].empty_label = 'Выберите грузоотправителя'
@@ -31,8 +32,12 @@ class BalloonTtnForm(forms.ModelForm):
         })
 
         # Оптимизированные запросы для партий с select_related
-        self.fields['loading_batch'].queryset = BalloonsLoadingBatch.objects.select_related('truck')
-        self.fields['unloading_batch'].queryset = BalloonsUnloadingBatch.objects.select_related('truck')
+        self.fields['loading_batch'].queryset = BalloonsBatch.objects.filter(
+            batch_type='l'
+        ).select_related('truck')
+        self.fields['unloading_batch'].queryset = BalloonsBatch.objects.filter(
+            batch_type='u'
+        ).select_related('truck')
 
         self.fields['loading_batch'].label_from_instance = self.format_batch_choice
         self.fields['unloading_batch'].label_from_instance = self.format_batch_choice
@@ -43,13 +48,10 @@ class BalloonTtnForm(forms.ModelForm):
 
     def format_batch_choice(self, obj):
         """Форматирует отображение партии в выпадающем списке"""
-        if isinstance(obj, BalloonsLoadingBatch):
-            batch_type = 'Приёмка'
-        else:
-            batch_type = 'Отгрузка'
+        batch_type = 'Приёмка' if obj.batch_type == 'l' else 'Отгрузка'
 
         truck_number = obj.truck.registration_number if obj.truck else '---'
-        ttn_number = obj.ttn if obj.ttn else '---'
+        ttn_number = obj.get_ttn_name() or obj.ttn_id or '---'
 
         return format_html(
             '<span data-ttn="{}">{} №{} | Автомобиль: {} | ТТН: {}</span>',
@@ -70,8 +72,7 @@ class BalloonTtnForm(forms.ModelForm):
             'consignee',
             'city',
             'loading_batch',
-            'unloading_batch',
-            'date'
+            'unloading_batch'
         ]
         widgets = {
             'number': forms.TextInput(attrs={
@@ -99,11 +100,6 @@ class BalloonTtnForm(forms.ModelForm):
             }),
             'unloading_batch': forms.Select(attrs={
                 'class': 'form-control',
-            }),
-            'date': forms.DateInput(attrs={
-                'type': 'date',
-                'class': 'form-control',
-                'placeholder': 'Дата формирования'
             }),
         }
 

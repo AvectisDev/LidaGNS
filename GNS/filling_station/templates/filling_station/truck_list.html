@@ -1,15 +1,18 @@
 {% extends 'base.html' %}
-{% load custom_filters %}
+{% load custom_filters navigation %}
 
 {% block title %}Список грузовиков{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Грузовики</h4>
-        <a href="{% url 'filling_station:truck_create' %}" class="btn btn-custom">
-            <i class="bi bi-plus-circle"></i> Добавить грузовик
-        </a>
+    <div class="batch-list-toolbar d-flex align-items-center mb-4">
+        <h4 class="mb-0 text-nowrap">Грузовики</h4>
+        <div class="d-flex align-items-center ms-auto gap-3">
+            {% include 'core/_text_query_filter.html' with query_placeholder='Гос. номер или марка' filter_width_class='list-filter-query--transport' %}
+            <a href="{% url 'filling_station:truck_create' %}" class="btn btn-custom text-nowrap">
+                <i class="bi bi-plus-circle"></i> Добавить грузовик
+            </a>
+        </div>
     </div>
 
     <div class="card shadow-sm">
@@ -32,7 +35,7 @@
                         <tr>
                             <td>{{ truck.car_brand|default:"-" }}</td>
                             <td>
-                                <a href="{{ truck.get_absolute_url }}" class="custom-link fw-bold">
+                                <a href="{% url_with_query truck.get_absolute_url %}" class="custom-link fw-bold">
                                     {{ truck.registration_number }}
                                 </a>
                             </td>
@@ -62,12 +65,10 @@
                             </td>
                             <td>
                                 <div class="action-buttons">
-                                    <a href="{{ truck.get_update_url }}" class="btn-icon btn-edit" title="Редактировать">
+                                    <a href="{% url_with_query truck.get_update_url %}" class="btn-icon btn-edit" title="Редактировать">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <a href="{{ truck.get_delete_url }}" class="btn-icon btn-delete" title="Удалить">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                                    {% include 'core/_delete_trigger.html' with url=truck.get_delete_url message="Вы уверены, что хотите удалить грузовик?" icon_only=True %}
                                 </div>
                             </td>
                         </tr>
@@ -80,7 +81,9 @@
                 </table>
             </div>
 
-            {% include 'filling_station/_paginator.html' %}
+            <div class="mt-4">
+                {% include 'core/_paginator.html' %}
+            </div>
         </div>
     </div>
 </div>
