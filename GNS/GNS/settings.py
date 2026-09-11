@@ -261,6 +261,15 @@ LOGGING = {
     },
 }
 
+# создаёт родительские каталоги при загрузке settings
+for _handler_cfg in LOGGING.get('handlers', {}).values():
+    _filename = _handler_cfg.get('filename')
+    if not _filename:
+        continue
+    _log_dir = os.path.dirname(_filename)
+    if _log_dir:
+        os.makedirs(_log_dir, exist_ok=True)
+
 DJANGO_API_HOST = 'http://localhost:8000/api'
 OPC_SERVER_URL = 'opc.tcp://192.168.100.54:4840'
 
