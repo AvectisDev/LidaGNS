@@ -6,7 +6,14 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Настройки карусели</h4>
+        <h4 class="mb-0">
+            {% if carousel_settings.name %}
+                {{ carousel_settings.name }}
+            {% else %}
+                Карусель {{ carousel_settings.number }}
+            {% endif %}
+        </h4>
+        <a href="{% url 'carousel:carousel_settings_list' %}" class="btn btn-outline-secondary btn-sm">К списку</a>
     </div>
 
     <div class="card shadow-sm mb-4">
@@ -14,12 +21,43 @@
             <div class="row">
                 <div class="col-md-6">
                     <dl class="row">
+                        <dt class="col-sm-8">Номер:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.number }}</dd>
+
+                        <dt class="col-sm-8">IP NPort:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.tcp_host|default:"—" }}</dd>
+
+                        <dt class="col-sm-8">TCP-порт:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.tcp_port }}</dd>
+
+                        <dt class="col-sm-8">RFID-считыватель:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.rfid_reader_id|default:"—" }}</dd>
+
+                        <dt class="col-sm-8">Активна (listener):</dt>
+                        <dd class="col-sm-4">
+                            <span class="badge bg-{% if carousel_settings.is_active %}success{% else %}secondary{% endif %}">
+                                {% if carousel_settings.is_active %}Да{% else %}Нет{% endif %}
+                            </span>
+                        </dd>
+
+                        <hr>
+
                         <dt class="col-sm-8">Только чтение:</dt>
                         <dd class="col-sm-4">
                             <span class="badge bg-{% if carousel_settings.read_only %}success{% else %}secondary{% endif %}">
                                 {% if carousel_settings.read_only %}Да{% else %}Нет{% endif %}
                             </span>
                         </dd>
+
+                        <dt class="col-sm-8">Объём по весу (27/50):</dt>
+                        <dd class="col-sm-4">
+                            <span class="badge bg-{% if carousel_settings.classify_size_by_weight %}success{% else %}secondary{% endif %}">
+                                {% if carousel_settings.classify_size_by_weight %}Да{% else %}Нет{% endif %}
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-8">Макс. вес пустого 27 л, г:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.size_27_empty_weight_max_g }}</dd>
 
                         <dt class="col-sm-8">Использовать коррекцию веса:</dt>
                         <dd class="col-sm-4">
@@ -28,6 +66,8 @@
                             </span>
                         </dd>
 
+                        <hr>
+                        
                         <dt class="col-sm-8">Использовать общее значение коррекции:</dt>
                         <dd class="col-sm-4">
                             <span class="badge bg-{% if carousel_settings.use_common_correction %}success{% else %}secondary{% endif %}">
@@ -35,8 +75,29 @@
                             </span>
                         </dd>
 
-                        <dt class="col-sm-8">Значение корректировки веса:</dt>
-                        <dd class="col-sm-4">{{ carousel_settings.weight_correction_value|floatformat:2 }}</dd>
+                        <dt class="col-sm-8">Общее значение коррекции:</dt>
+                        <dd class="col-sm-4">{{ carousel_settings.weight_correction_value|floatformat:2 }} кг</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row g-2">
+                        <dt class="col-sm-6">Минимальный вес баллона:</dt>
+                        <dd class="col-sm-6">
+                            от {{ carousel_settings.min_balloon_weight_from|floatformat:2 }}
+                            до {{ carousel_settings.min_balloon_weight_to|floatformat:2 }} кг
+                        </dd>
+
+                        <dt class="col-sm-6">Максимальный вес баллона:</dt>
+                        <dd class="col-sm-6">
+                            от {{ carousel_settings.max_balloon_weight_from|floatformat:2 }}
+                            до {{ carousel_settings.max_balloon_weight_to|floatformat:2 }} кг
+                        </dd>
+
+                        <dt class="col-sm-6">Разница паспортных весов:</dt>
+                        <dd class="col-sm-6">
+                            от {{ carousel_settings.passport_weight_diff_from|floatformat:2 }}
+                            до {{ carousel_settings.passport_weight_diff_to|floatformat:2 }} кг
+                        </dd>
                     </dl>
                 </div>
             </div>
@@ -93,7 +154,7 @@
     </div>
 
     <div class="d-flex justify-content-end">
-        <a href="{% url 'carousel:carousel_settings_update' %}" class="btn btn-custom">
+        <a href="{% url 'carousel:carousel_settings_update' number=carousel_settings.number %}" class="btn btn-custom">
             <i class="bi bi-pencil"></i> Редактировать
         </a>
     </div>

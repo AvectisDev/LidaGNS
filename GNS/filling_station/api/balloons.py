@@ -230,28 +230,31 @@ class BalloonViewSet(viewsets.ViewSet):
                 brutto=balloon.brutto,
                 filling_status=balloon.filling_status
             )
-            # Сохраняем баллон в кэш на каруселях наполнения №1 и 2)
+            # Очередь паспортов для карусели (readers 7/8) — Redis FIFO как в Pinsk
             if reader_number in [7, 8]:
-                timeout_hours = 1
-                timeout_seconds = timeout_hours * 3600
+                from core.redis_queue import (
+                    get_reader_balloon_queue_key,
+                    push_json_to_queue,
+                )
 
-                cache_key = f'reader_{reader_number}_balloon_stack'
-                stack = cache.get(cache_key, [])
-
-                # Добавляем объект в стек
-                stack.insert(0, {
-                    'number': reader_balloon.number,
-                    'nfc_tag': reader_balloon.nfc_tag,
-                    'serial_number': reader_balloon.serial_number,
-                    'size': reader_balloon.size,
-                    'netto': reader_balloon.netto,
-                    'brutto': reader_balloon.brutto,
-                    'filling_status': reader_balloon.filling_status,
-                })
-                logger.debug(f'Стек считывателя {reader_number} = {stack}')
-
-                # Сохраняем обновленный стек в кэш
-                cache.set(cache_key, stack, timeout=timeout_seconds)
+                timeout_seconds = 10 * 60
+                queue_key = get_reader_balloon_queue_key(reader_number)
+                queue_length = push_json_to_queue(
+                    queue_key,
+                    {
+                        'nfc_tag': reader_balloon.nfc_tag,
+                        'serial_number': reader_balloon.serial_number,
+                        'size': reader_balloon.size,
+                        'netto': reader_balloon.netto,
+                        'brutto': reader_balloon.brutto,
+                        'filling_status': reader_balloon.filling_status,
+                    },
+                    timeout=timeout_seconds,
+                )
+                logger.debug(
+                    f'Баллон {reader_balloon.nfc_tag} в очередь {queue_key}, '
+                    f'размер={queue_length}'
+                )
 
         serializer = BalloonSerializer(balloon)
         return Response(serializer.data)

@@ -1,9 +1,9 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.paginator import Paginator
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse
 from django.views import generic
-from datetime import datetime
+from datetime import datetime, time
 from .models import Carousel, CarouselSettings
 from .admin import CarouselResources
 from .forms import CarouselSettingsForm, GetCarouselBalloonsAmount
@@ -23,20 +23,26 @@ def carousel_info(request, carousel_number=1):
             end_date = current_date
             size = None
 
+        # Диапазон по времени для одного дня
+        if start_date == end_date:
+            date_start = datetime.combine(start_date, time.min)
+            date_end = datetime.combine(start_date, time.max)
+        else:
+            date_start = datetime.combine(start_date, time.min)
+            date_end = datetime.combine(end_date, time.max)
+
         action = request.POST.get('action')
 
         if action == 'export':
             queryset = Carousel.objects.filter(
                 carousel_number=carousel_number,
-                change_date__range=(start_date, end_date)
+                change_at__range=(date_start, date_end)
             )
             if size:
                 queryset = queryset.filter(size=size)
-
             dataset = CarouselResources().export(queryset)
             response = HttpResponse(dataset.xlsx, content_type='xlsx')
-            response[
-                'Content-Disposition'] = f'attachment; filename="Carousel_{carousel_number}_{start_date}-{end_date}.xlsx"'
+            response['Content-Disposition'] = f'attachment; filename="Carousel_{carousel_number}_{start_date}-{end_date}.xlsx"'
             return response
 
     else:
@@ -45,18 +51,25 @@ def carousel_info(request, carousel_number=1):
         end_date = current_date
         size = None
 
+        if start_date == end_date:
+            date_start = datetime.combine(start_date, time.min)
+            date_end = datetime.combine(start_date, time.max)
+        else:
+            date_start = datetime.combine(start_date, time.min)
+            date_end = datetime.combine(end_date, time.max)
+
     carousel_list = Carousel.objects.all()
 
     if size:
         total_count = carousel_list.filter(
             carousel_number=carousel_number,
-            change_date__range=(start_date, end_date),
+            change_at__range=(date_start, date_end),
             size=size
         ).count()
     else:
         total_count = carousel_list.filter(
             carousel_number=carousel_number,
-            change_date__range=(start_date, end_date)
+            change_at__range=(date_start, date_end)
         ).count()
 
     paginator = Paginator(carousel_list, 10)
@@ -75,13 +88,18 @@ def carousel_info(request, carousel_number=1):
     return render(request, "carousel/carousel_list.html", context)
 
 
+class CarouselSettingsListView(generic.ListView):
+    model = CarouselSettings
+    template_name = 'carousel/carousel_settings_list.html'
+    context_object_name = 'carousel_settings_list'
+
+
 class CarouselSettingsDetailView(generic.DetailView):
     model = CarouselSettings
     template_name = 'carousel/carousel_settings_detail.html'
     context_object_name = 'carousel_settings'
-
-    def get_object(self, queryset=None):
-        return CarouselSettings.objects.first()
+    slug_field = 'number'
+    slug_url_kwarg = 'number'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -93,12 +111,22 @@ class CarouselSettingsUpdateView(generic.UpdateView):
     model = CarouselSettings
     form_class = CarouselSettingsForm
     template_name = 'carousel/_equipment_form.html'
-
-    def get_object(self, queryset=None):
-        return CarouselSettings.objects.first()
+    slug_field = 'number'
+    slug_url_kwarg = 'number'
 
     def get_success_url(self):
-        return reverse('carousel:carousel_settings_detail')
+        return reverse(
+            'carousel:carousel_settings_detail',
+            kwargs={'number': self.object.number},
+        )
+
+    def post(self, request, *args, **kwargs):
+        if 'cancel' in request.POST:
+            return redirect(
+                'carousel:carousel_settings_detail',
+                number=self.get_object().number,
+            )
+        return super().post(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Balloon, Truck, TruckType, Trailer, TrailerType, BalloonsLoadingBatch, BalloonsUnloadingBatch
+from .models import Balloon, Truck, TruckType, Trailer, TrailerType, BalloonsLoadingBatch, BalloonsUnloadingBatch, ReaderSettings
 from import_export import resources
 
 
@@ -15,6 +15,12 @@ class BalloonResources(resources.ModelResource):
             'filling_status',
             "change_date"
         ]
+
+
+@admin.register(ReaderSettings)
+class ReaderSettingsAdmin(admin.ModelAdmin):
+    list_display = ['number', 'status', 'ip', 'port', 'function', 'need_cache']
+    list_editable = ['status', 'ip', 'port', 'function', 'need_cache']
 
 
 @admin.register(Balloon)

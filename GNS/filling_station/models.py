@@ -12,6 +12,12 @@ BATCH_TYPE_CHOICES = [
     ('u', 'Отгрузка'),
 ]
 
+READER_FUNCTION_CHOICES = [
+    ('l', 'Приёмка'),
+    ('u', 'Отгрузка'),
+    ('p', 'Нет'),
+]
+
 
 BALLOON_SIZE_CHOICES = [
     (5, 5),
@@ -67,6 +73,32 @@ class Balloon(models.Model):
     def clean(self):
         if self.brutto and self.netto and self.brutto < self.netto:
             raise ValidationError("Вес наполненного баллона должен быть больше веса пустого баллона.")
+
+
+class ReaderSettings(models.Model):
+    """Конфигурация RFID-считывателя (номер = PK, для очереди карусели)."""
+
+    number = models.IntegerField(primary_key=True, verbose_name="Номер считывателя")
+    status = models.CharField(null=True, blank=True, max_length=100, verbose_name="Статус")
+    ip = models.CharField(null=True, blank=True, max_length=15, verbose_name="IP адрес")
+    port = models.IntegerField(default=10001, verbose_name="Порт")
+    function = models.CharField(
+        choices=READER_FUNCTION_CHOICES,
+        default='p',
+        verbose_name="Функция",
+    )
+    need_cache = models.BooleanField(default=False, verbose_name="Добавлять в кеш")
+
+    def __int__(self):
+        return self.number
+
+    def __str__(self):
+        return self.status or str(self.number)
+
+    class Meta:
+        verbose_name = "Настройки считывателей"
+        verbose_name_plural = "Настройки считывателей"
+        ordering = ['number']
 
 
 class Reader(models.Model):

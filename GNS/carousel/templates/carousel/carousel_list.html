@@ -47,8 +47,8 @@
                             {% endif %}
                         </td>
                         <td>
-                            <div>{{ item.change_date|date:"d.m.Y"|default:"-" }}</div>
-                            <small class="text-muted">{{ item.change_time|time:"H:i"|default:"" }}</small>
+                            <div>{{ item.change_at|date:"d.m.Y"|default:"-" }}</div>
+                            <small class="text-muted">{{ item.change_at|time:"H:i"|default:"" }}</small>
                         </td>
                     </tr>
                     {% empty %}
@@ -72,26 +72,15 @@
                 <div class="col-md-7">
                     <form method="post" enctype="multipart/form-data" class="row g-3">
                         {% csrf_token %}
-<!--                        <div class="col-md-4">-->
-<!--                            {{ form.start_date|as_crispy_field }}-->
-<!--                        </div>-->
-<!--                        <div class="col-md-4">-->
-<!--                            {{ form.end_date|as_crispy_field }}-->
-<!--                        </div>-->
                         <div class="col-md-8">
                             {{ form.start_date|as_crispy_field }}
                             {{ form.end_date|as_crispy_field }}
                         </div>
                         <div class="col-md-4">
-                            {{ form.size|as_crispy_field }}
-                        </div>
-                        <div class="col-md-6">
                             <button type="submit" name="action" value="show" class="btn btn-custom w-100">
                                 <i class="bi bi-eye"></i> Показать
                             </button>
-                        </div>
-                        <div class="col-md-6">
-                            <button type="submit" name="action" value="export" class="btn btn-custom w-100">
+                            <button type="submit" name="action" value="export" class="btn btn-custom w-100 mt-3">
                                 <i class="bi bi-download"></i> Выгрузить
                             </button>
                         </div>
@@ -101,6 +90,6 @@
         </div>
     </div>
 
-    {% include 'carousel/_paginator.html' %}
+    {% include 'core/_paginator.html' %}
 </div>
 {% endblock content %}
