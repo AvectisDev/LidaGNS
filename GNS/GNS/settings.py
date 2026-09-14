@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOGS_DIR = os.path.join(BASE_DIR, 'log')
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
-DEBUG = os.environ.get('DEBUG')
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.66.248', '10.0.2.2']
 
@@ -38,10 +38,12 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'crispy_forms',
     "crispy_bootstrap5",
-    'debug_toolbar',
     'pghistory',
     'pgtrigger'
 ]
+
+if DEBUG:
+    INSTALLED_APPS.append('debug_toolbar')
 
 INTERNAL_IPS = [
     '127.0.0.1',
@@ -105,8 +107,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "debug_toolbar.middleware.DebugToolbarMiddleware"
 ]
+
+if DEBUG:
+    MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
 ROOT_URLCONF = 'GNS.urls'
 
@@ -141,7 +145,6 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST'),
         'PORT': os.environ.get('DB_PORT'),
-        'CONN_MAX_AGE': 600,  # Соединение будет жить 10 минут
     }
 }
 
